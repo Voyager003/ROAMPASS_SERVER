@@ -84,7 +84,7 @@ P1의 `Plan`·`Order`·`StatusHistory` 위에 유스케이스·영속성·API를
 
 - [x] **P3-1** `mock-pg` 기본: `POST /mock/pg/approve`(멱등 키 재요청은 처음 결과 반환), `POST /mock/pg/cancel`(전액/부분, 취소 키 멱등 — #47), `GET /mock/pg/payments/{idempotencyKey}`(상태 조회), 승인 후 서명(HMAC-SHA256)된 웹훅 비동기 발송(이벤트 ID 포함)
 - [x] **P3-2** `mock-pg` 장애 주입: 실패율 / 응답 지연 / 웹훅 중복 횟수 / 웹훅 생략 / 금액 변조 / 취소 실패 — 설정값 + 런타임 변경 엔드포인트(`/mock/pg/config`) + 동작 테스트
-- [ ] **P3-3** 결제 유스케이스(Fake): `PgClient` 포트, `PaymentRepository`·`CallbackLogRepository`, 결제 요청(tx#1 `REQUESTED` → PG 호출은 트랜잭션 밖 → tx#2 결과 반영, 요청 시점 만료 재확인), "결제 확정" 단일 유스케이스(응답·웹훅 공용, 주문 `PAID`/`PICKUP_READY` + history, 만료 후 승인은 `REFUNDING`), 웹훅 처리(`CallbackLog` 선 INSERT로 중복 skip, 서명 불일치 거절, 금액 불일치 거절 + 이상 건 기록)
+- [x] **P3-3** 결제 유스케이스(Fake): `PgClient` 포트, `PaymentRepository`·`CallbackLogRepository`, 결제 요청(tx#1 `REQUESTED` → PG 호출은 트랜잭션 밖 → tx#2 결과 반영, 요청 시점 만료 재확인), "결제 확정" 단일 유스케이스(응답·웹훅 공용, 주문 `PAID`/`PICKUP_READY` + history, 만료 후 승인은 `REFUNDING`), 웹훅 처리(`CallbackLog` 선 INSERT로 중복 skip, 서명 불일치 거절, 금액 불일치 거절 + 이상 건 기록)
 - [ ] **P3-4** 영속성: `V3`(`payment`·`callback_log`), 멱등 키 UNIQUE, 주문당 승인 결제 1건 부분 UNIQUE, `event_key` UNIQUE, 어댑터, 서비스 빈 등록
 - [ ] **P3-5** PG HTTP 어댑터(`RestClient`, 연결·읽기 타임아웃 명시, `MockRestServiceServer` 테스트) + API: `POST /api/orders/{orderNo}/pay`, `POST /api/payments/webhook`
 - [ ] **P3-6** 응답 유실 정리 스케줄러: 오래 `REQUESTED`로 남은 결제를 PG 상태 조회로 확정

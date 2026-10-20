@@ -24,26 +24,26 @@
 "clone 후 README 커맨드로 뜬다"를 만드는 Phase. 기능은 없다.
 
 - [x] README 뼈대, plan.md 커밋 (`main`의 `19c185b`)
-- [ ] **P0-1** 브랜치 생성 + `docs/decisions.md`(지금까지의 결정)
-- [ ] **P0-2** 설정 구조 + 테스트 인프라 (단일 모듈 상태에서)
+- [x] **P0-1** 브랜치 생성 + `docs/decisions.md`(지금까지의 결정)
+- [x] **P0-2** 설정 구조 + 테스트 인프라 (단일 모듈 상태에서)
   - 의존성: Testcontainers PostgreSQL, Awaitility (Boot 4.1.1 공식 문서로 좌표 확인)
   - `application.yml`(공통·비민감) / `application-local.yml`(ignore) / `application-local.yml.example` / `application-test.yml` / `application-prod.yml`(환경변수만), `.gitignore` 정리
   - `compose.yaml`: postgres 포트 고정, DB명·계정 정리 (로컬 전용 값). **앱 3개를 compose에 넣는 것은 Dockerfile이 생기는 P4에서**
   - Flyway 기동(마이그레이션 0개), `ddl-auto: validate`, `open-in-view: false`
   - 테스트: Testcontainers 베이스 클래스 + 컨텍스트 로드가 실제 PostgreSQL로 통과
-- [ ] **P0-3** Gradle 멀티모듈 전환
+- [x] **P0-3** Gradle 멀티모듈 전환
   - 루트(공통 설정) + `roampass-api`(기존 `src`를 `git mv`) / `mock-pg` / `mock-supplier`(DB 없는 빈 Boot 앱). 모듈 간 코드 의존 없음
   - `HELP.md`·`out/` 제거
   - 테스트: 모듈별 컨텍스트 로드, mock 두 앱 `/actuator/health` UP
-- [ ] **P0-4** `common` 공통 계층 (TDD)
+- [x] **P0-4** `common` 공통 계층 (TDD)
   - 도메인 예외 베이스, 에러 응답 + `@RestControllerAdvice`
   - `UserId`/`AdminId` VO + ArgumentResolver (`/api/**`는 `X-User-Id`, `/admin/**`는 `X-Admin-Id` 필수, 없으면 401)
   - `Clock` 빈, KST 변환 유틸
   - 테스트: VO 검증, 헤더 누락 401·정상 주입(웹 슬라이스), KST 변환(자정 경계)
-- [ ] **P0-5** `Money` 값 객체 (TDD): amount ≥ 0, 통화(초기 KRW), 같은 통화끼리만 연산·비교, 음수 결과 거부
-- [ ] **P0-6** README 초안(**실행 방법**, **Q1** 지금까지의 기술 선택 이유) + decisions 갱신 + 이 체크리스트 갱신
+- [x] **P0-5** `Money` 값 객체 (TDD): amount ≥ 0, 통화(초기 KRW), 같은 통화끼리만 연산·비교, 음수 결과 거부
+- [x] **P0-6** README 초안(**실행 방법**, **Q1** 지금까지의 기술 선택 이유) + decisions 갱신 + 이 체크리스트 갱신
 - 완료 기준: `./gradlew test` 전 모듈 통과, `docker compose up -d` 후 세 앱 `bootRun` → `/actuator/health` UP
-- 테스트 실행 분담: 단위 테스트는 Claude 셸(JDK 21)에서, Testcontainers 통합 테스트는 사용자 Mac에서 실행해 결과 공유
+- 테스트 실행: Claude 쪽 환경은 Maven Central·Gradle 접속이 막혀 빌드 불가 → 모든 테스트를 사용자 Mac에서 `./gradlew test`로 실행하고, Claude가 `build/test-results`를 읽어 확인
 
 ## P1. 요금제 · 주문 — `phase/p1-order` — 과제 2.3-①
 

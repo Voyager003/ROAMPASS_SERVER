@@ -97,7 +97,7 @@ P1의 `Plan`·`Order`·`StatusHistory` 위에 유스케이스·영속성·API를
 
 `SimProfile`·`RefundAttempt` 도메인은 P1에, 수신 기록(`CallbackLog`)·서명 검증(`HmacSignature`)·조건부 UPDATE는 P3에 있다. 순서는 mock → application(Fake) → 영속성 → API·스케줄러(decisions #62). 유심 개통 API는 P5.
 
-- [ ] **P4-1** `mock-supplier`(부록 A): `POST /mock/supplier/orders` → 202 + `supplierOrderNo`(같은 멱등 키면 같은 번호), 몇 초 뒤 `X-Signature`(HMAC-SHA256) 콜백(성공: iccid·activationCode / 실패), `GET /mock/supplier/profiles/{iccid}`, 시연용 상태 변경 `POST /mock/supplier/profiles/{iccid}/state`. 장애 주입(발급 실패율 / 콜백 지연·중복·누락 / 서명 오류) + `/mock/supplier/config`
+- [x] **P4-1** `mock-supplier`(부록 A): `POST /mock/supplier/orders` → 202 + `supplierOrderNo`(같은 멱등 키면 같은 번호), 몇 초 뒤 `X-Signature`(HMAC-SHA256) 콜백(성공: iccid·activationCode / 실패), `GET /mock/supplier/profiles/{iccid}`, 시연용 상태 변경 `POST /mock/supplier/profiles/{iccid}/state`. 장애 주입(발급 실패율 / 콜백 지연·중복·누락 / 서명 오류) + `/mock/supplier/config`
 - [ ] **P4-2** 발급·환불 유스케이스(Fake): `SupplierClient`·`PgClient.cancel` 포트, `IssuanceRequestRepository`·`SimProfileRepository`·`RefundAttemptRepository`. 발급 요청(`PAID`+ESIM을 조건부 UPDATE로 `ISSUE_REQUESTED` → 공급사 호출은 밖 → `supplierOrderNo` 저장, 접수 실패는 같은 멱등 키로 재시도), 콜백 처리(수신 기록 선 INSERT → `SimProfile` 생성 → 주문 `ISSUED`, 이미 실패 처리된 주문의 늦은 성공은 무시 + 이상 건 기록), 콜백 타임아웃(2분) → `ISSUE_FAILED` → 환불 시작, 환불 재시도(PG 취소, 최대 3회·1분부터 2배) → `REFUNDED` / 상한 초과 `NEEDS_ATTENTION`. 만료 뒤 승인(P3의 `REFUNDING`)도 같은 환불 흐름
 - [ ] **P4-3** 영속성: `V4`(`issuance_request`·`sim_profile`·`refund_attempt`, 주문번호·iccid·`supplier_order_no` UNIQUE), 어댑터, 서비스 빈 등록
 - [ ] **P4-4** HTTP 어댑터(공급사 발급 요청, PG 취소) + `POST /api/issuance/callback`(서명 검증 401, 모르는 주문 거절) + 스케줄러(발급 요청 / 콜백 타임아웃 / 환불 재시도)

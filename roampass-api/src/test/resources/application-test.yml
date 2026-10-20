@@ -3,3 +3,8 @@
 spring:
   jpa:
     show-sql: false
+
+# 스케줄러 끔. 만료 등 주기 작업은 테스트에서 유스케이스를 직접 호출
+roampass:
+  scheduling:
+    enabled: false

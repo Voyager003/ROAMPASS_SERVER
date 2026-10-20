@@ -14,8 +14,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record OrderProperties(Duration paymentWindow, Expiration expiration) {
 
     /**
-     * @param batchSize 한 번 실행에 만료 처리하는 최대 건수
+     * @param batchSize  한 번 실행에 만료 처리하는 최대 건수
+     * @param fixedDelay 스케줄러 실행 간격, 이전 실행 종료 기준
      */
-    public record Expiration(int batchSize) {
+    public record Expiration(int batchSize, Duration fixedDelay) {
     }
 }

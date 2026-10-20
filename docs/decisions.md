@@ -1,0 +1,35 @@
+# 설계 · 기술 결정 기록
+
+기술·설계 선택이 생길 때마다 바로 한 줄씩 추가한다. README Q1(기술 선택 이유)과 Q2~Q6 답의 원본.
+형식: 날짜 | 선택 | 고려한 대안 | 이유. 결정이 바뀌면 지우지 않고 새 줄로 추가하고 이전 줄에 "→ #번호로 변경"을 단다.
+
+| # | 날짜 | 선택 | 고려한 대안 | 이유 |
+|---|---|---|---|---|
+| 1 | 2026-10-19 | 백엔드 Java 21 + Spring Boot 4.1.1 + Gradle(Kotlin DSL) | — | Spring Initializr 생성본을 그대로 사용. Boot 4는 의존성 좌표가 3.x와 달라 추가할 때마다 공식 문서로 확인 |
+| 2 | 2026-10-19 | DB PostgreSQL, 스키마는 Flyway + `ddl-auto: validate` | `ddl-auto: update`, Liquibase | 과제 측 사용 DB. 빈 DB에서 스키마·시드 재현이 제출 요건(2.5-④)이라 마이그레이션 파일로 관리 |
+| 3 | 2026-10-19 | 비동기 작업(발급 요청·재시도·만료)은 DB 상태 기반 `@Scheduled` 폴링 | 커밋 후 이벤트 + `@Async`, 메시지 큐(Redis/RabbitMQ) | 결제 커밋 후 클라이언트가 사라져도 서버가 발급을 이어감(2.3-③ "브라우저를 닫아도"). 외부 인프라가 없고 서버 재시작에 안전, 테스트가 쉬움. 대가: 폴링 주기만큼의 지연과 조회 비용 |
+| 4 | 2026-10-19 | 통합·동시성 테스트는 Testcontainers PostgreSQL | compose의 PG 재사용, H2(PostgreSQL 모드) | 유니크 제약·조건부 UPDATE·락의 동작은 실제 PostgreSQL에서만 검증 의미가 있음. 대가: 테스트 실행에 Docker 필요 |
+| 5 | 2026-10-19 | Lombok 제한 사용(`@Getter`, `@NoArgsConstructor(PROTECTED)`, `@RequiredArgsConstructor`, `@Slf4j`), domain 패키지는 Lombok 미사용 | 자유 사용, 미사용 | setter·빌더를 막아 상태 변경이 의도가 드러나는 메서드로만 일어나게 함. 도메인은 순수 Java 유지 |
+| 6 | 2026-10-19 | 인증은 `X-User-Id` / `X-Admin-Id` 헤더, 회원 도메인 없음 | 회원 테이블 + 로그인 | 과제 2.2가 헤더 수준이면 충분하고 평가 항목이 아니라고 명시. 헤더 위조 가능성은 README "가정"에 기록 |
+| 7 | 2026-10-20 | 패키지는 도메인별(`order`, `payment` …) + 내부 레이어(api / application / domain / infrastructure) | 전역 레이어드, 헥사고날 | 도메인 경계가 README 설명 단위와 일치. 외부 시스템은 domain이 정의한 포트(`PgClient`, `SupplierClient`)로 접근 |
+| 8 | 2026-10-20 | domain은 순수 Java, JPA 엔티티는 `infrastructure/persistence`에 분리하고 각 Phase의 마지막에 매핑 | 도메인 객체에 JPA 애너테이션 직접 사용 | 상태 전이·멱등 규칙을 Spring 없이 단위 테스트. 도메인이 확정된 뒤 스키마를 정해 잘못된 스키마로 도메인이 굳는 것을 피함. 대가: 매퍼 코드 증가 |
+| 9 | 2026-10-20 | Gradle 멀티모듈 3개: `roampass-api` / `mock-pg` / `mock-supplier`, 모듈 간 코드 의존 없음(HMAC 서명 코드도 각자 구현) | 단일 앱에 `mock/` 패키지 | PG 타임아웃·공급사 다운·콜백 누락을 실제 프로세스·네트워크 분리로 재현. 외부 시스템과는 HTTP 계약만 공유하고, 독립 구현인데 서명이 맞는 것을 계약 준수의 증거로 삼음 |
+| 10 | 2026-10-20 | 모의 PG·공급사 상태는 각 mock 앱의 인메모리 저장(DB 없음) | mock 전용 DB | 1GB 인스턴스 메모리 절약. 대가: mock 재시작 시 모의 상태가 사라짐(README에 명시) |
+| 11 | 2026-10-20 | 배포는 Oracle Cloud Always Free AMD Micro(1GB) 2대. A: api + PostgreSQL, B: mock-pg + mock-supplier, 인스턴스 간 VCN 사설 IP 통신 | 1대에 단일 앱, 1대에 3모듈, 외부 관리형 DB(Neon·Supabase) | 1GB 1대에 JVM 3개 + DB는 OOM 위험(추정치 기준). 무료 한도 안에서 메모리를 확보하고 외부 시스템이 실제로 다른 호스트에 있는 구조. 상시 가동이라 스케줄러가 멈추지 않음. Always Free 한도는 인스턴스 생성 시 콘솔에서 확인 필요 |
+| 12 | 2026-10-20 | 이미지는 인스턴스에서 빌드하지 않고 로컬/CI에서 `linux/amd64`로 빌드 후 pull | 인스턴스에서 Gradle 빌드 | 1GB에서 Gradle 빌드는 메모리 부족·과도한 시간 위험 |
+| 13 | 2026-10-20 | 상태 변경 이력은 별도 이력 테이블(`status_history`)에 같은 트랜잭션으로 기록 | Hibernate Envers 등 자동 감사, 이벤트 소싱 | 과제 2.3-⑤가 "언제·무엇이·누가/어떤 신호로"를 요구 → 사유·신호 출처를 담아야 해 자동 감사로는 부족. 이벤트 소싱은 과제 규모에 과함 |
+| 14 | 2026-10-20 | `Money` 값 객체(금액 + 통화)를 P0부터 사용, `SupplierClient` 포트를 P3에서 정의 | 금액을 `long`으로, 공급사 HTTP 클라이언트 직접 사용 | 가산점 다통화·공급사 추상화를 나중에 싸게 붙이기 위한 사전 설계. 비용이 거의 없음 |
+| 15 | 2026-10-20 | Phase마다 브랜치 `phase/p{N}-{이름}`, 완료 시 `--no-ff` 머지 | `main` 직접 커밋, PR | 과제가 커밋으로 "어떤 순서로 문제를 풀었는지"를 봄(2.5-⑥). 머지 커밋이 Phase 경계를 드러냄 |
+| 16 | 2026-10-20 | 1차 배포를 발급 Phase(P3) 직후에 수행 | 모든 기능 완성 후 한 번에 배포 | 접속 URL은 없으면 평가 불가인 제출물이고, 처음 해 보는 작업(인스턴스 2대·사설 IP·amd64 빌드)이 가장 많음. 리스크를 앞당김 |
+| 17 | 2026-10-20 | P0의 compose는 PostgreSQL만, 앱 3개는 `bootRun`으로 실행. 앱의 compose 편입은 P4 | P0부터 앱 3개를 compose로 | 앱을 compose로 띄우려면 Dockerfile이 필요하고 이는 배포 Phase의 작업 |
+| 18 | 2026-10-20 | 로컬 DB 접속 정보는 `.env`(compose용)와 `application-local.yml`(앱용)에 두고 둘 다 gitignore, `.example` 파일만 커밋 | compose.yaml·application.yml에 로컬 계정 직접 기입 | 로컬 전용 값이라도 비밀번호가 저장소에 들어가지 않게 함(2.7 감점 항목 "시크릿 커밋"). 대가: 두 파일의 값을 맞춰야 함 |
+| 19 | 2026-10-20 | `spring-boot-docker-compose`(bootRun 시 compose 자동 기동) 의존성 제거, compose는 `docker compose up -d`로 직접 실행 | 유지(compose에서 접속 정보 자동 주입) | 접속 정보의 출처를 `application-local.yml` 하나로 고정해 "어디서 값이 오는지"가 명확하게. README 실행 방법도 명령어 그대로 재현 가능 |
+| 20 | 2026-10-20 | 통합 테스트는 `@IntegrationTest`(SpringBootTest + test 프로필 + Testcontainers 설정) 하나로 묶고, PostgreSQL 컨테이너는 `@ServiceConnection` 빈으로 제공 | 테스트마다 `@Container` 정적 필드 | 모든 통합 테스트가 같은 설정을 쓰면 Spring 컨텍스트 캐시로 컨테이너가 사실상 한 번만 뜸. 접속 정보를 테스트에 적을 필요 없음 |
+| 21 | 2026-10-20 | 로컬 포트 고정: api 8080 / mock-pg 8081 / mock-supplier 8082. mock 패키지는 `com.roampass.mock.{pg,supplier}` | 랜덤 포트 | 세 앱을 동시에 띄우고 서로의 주소를 설정값으로 고정하기 위함. 배포 토폴로지(CLAUDE.md)의 포트와 동일 |
+| 22 | 2026-10-20 | `common`을 `common.domain`(순수 Java 공유 커널) / `common.web` / `common.config`로 나누고, 도메인 패키지는 `common.domain`만 import 허용 | 도메인마다 VO 중복 정의 | `Money`·`UserId`·도메인 예외를 모든 도메인이 공유해야 하는데, 기존 규칙("같은 도메인 패키지만 import")으로는 불가능. 공유 커널도 Spring·JPA 금지는 동일 |
+| 23 | 2026-10-20 | 에러 응답은 RFC 9457 `ProblemDetail` + `code` 속성. 예외 타입별로 웹 계층에서 HTTP 상태 매핑(InvalidValue 400, IllegalStateTransition 409, 인증 헤더 누락 401, 그 외 500) | 자체 `{code, message}` 형식, 예외에 HttpStatus 포함 | Spring 내장 표준 형식. 도메인 예외가 HTTP를 모르게 유지. `ResponseEntityExceptionHandler`를 상속해 404·405 같은 Spring 기본 예외가 500으로 바뀌지 않게 함. 일반 `IllegalArgumentException`은 400으로 일괄 매핑하지 않음(버그를 입력 오류로 숨기지 않기 위해) |
+| 24 | 2026-10-20 | `X-User-Id`는 컨트롤러가 `UserId` 파라미터를 선언했을 때만 필수, `X-Admin-Id`는 `/admin/**` 전체에 인터셉터로 강제 | 둘 다 경로 단위 / 둘 다 파라미터 단위 | 요금제 조회처럼 헤더 없이 볼 API가 있음. 어드민은 새 API에서 파라미터를 빠뜨려도 막히도록(fail-closed). CORS preflight(OPTIONS)는 통과 |
+| 25 | 2026-10-20 | 헤더 식별자 형식: 1~64자, `A-Z a-z 0-9 _ -`만 허용, 위반 시 400. 에러 메시지에 입력값을 넣지 않음 | 빈 값만 거부 | history·로그에 그대로 남는 값이라 로그 주입 방지 |
+| 26 | 2026-10-20 | 현재 시각은 `Clock.systemUTC()` 빈에서만 얻고 도메인에는 `Instant`로 전달. KST 변환은 `KoreaTime`(상수 + 날짜/일시 변환)만 두고 만료 규칙은 P6에서 | 도메인에서 `Instant.now()` 직접 호출 | 시간 의존 로직을 고정 시각으로 테스트하기 위함 |
+| 27 | 2026-10-20 | `Money(long amount, Currency currency)` record: 통화 최소 단위의 `long`, 음수 금지(뺄셈 결과 포함), 덧셈 오버플로 거부, 통화가 다르면 `CURRENCY_MISMATCH` | `BigDecimal`, 금액만 `long` | 판매 통화가 KRW(소수 없음)라 `long`으로 충분하고 비교·연산이 단순. "승인 금액보다 많이 취소"를 값 객체 수준에서 막음. `Currency`에 USD를 미리 두어 통화 검사를 실제로 테스트(환율·표시는 B-1) |
+| 28 | 2026-10-20 | record VO는 public 기본 생성자를 허용하되 compact 생성자에서 검증하고, 호출 쪽은 정적 팩토리 사용 | record 대신 일반 클래스 + private 생성자 | record의 기본 생성자는 언어상 항상 public. 생성자 검증으로 잘못된 인스턴스가 존재할 수 없게 하면 규칙의 목적(불변식 보장)은 지켜짐 |

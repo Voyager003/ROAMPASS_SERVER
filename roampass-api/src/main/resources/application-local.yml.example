@@ -1,0 +1,7 @@
+# Copy this file to application-local.yml and fill in the values.
+# Values must match .env (used by compose.yaml).
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/roampass
+    username: roampass
+    password: change-me

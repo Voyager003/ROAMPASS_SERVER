@@ -1,7 +1,7 @@
 # 작업 계획 · 체크리스트
 
 **작업 관리용** 문서.
-요구사항 원문과 ID(`R-*`, `T-*`, `B-*`)는 `docs/requirements.md`, 작업 규칙은 `CLAUDE.md`.
+요구사항 원문은 과제 PDF 2.3(필수)·2.8(가산점), 작업 규칙은 `CLAUDE.md`.
 
 ## 계획의 근거
 
@@ -21,19 +21,31 @@
 
 ## P0. 기반 — `phase/p0-foundation`
 
-- [ ] 문서 커밋: `README.md` 뼈대, `docs/requirements.md`, `docs/plan.md`, `docs/decisions.md`(지금까지의 결정 기입), `docs/learning-log.md`, `docs/timelog.md`
-- [ ] Gradle 멀티모듈 전환: 루트(공통 설정) + `roampass-api`(기존 `src` 이동) / `mock-pg` / `mock-supplier` 빈 앱. 모듈 간 코드 의존 없음
-- [ ] 설정 구조 전환: `application.yml`(공통, 커밋) / `application-local.yml`(민감, ignore) / `application-local.yml.example` / `application-test.yml` / `application-prod.yml`. `.gitignore` 정리
-- [ ] `compose.yaml`: postgres(포트 고정) + 3개 앱 로컬 실행. `HELP.md`·`out/` 제거
-- [ ] 의존성 추가(Boot 4 좌표를 공식 문서로 확인): Testcontainers PostgreSQL, Awaitility. Mockito·AssertJ는 starter 포함 여부 확인
-- [ ] `roampass-api` 패키지 골격 + `common`: 도메인 예외 베이스, 에러 응답(`@RestControllerAdvice`), `X-User-Id`/`X-Admin-Id` ArgumentResolver, `Clock` 빈, KST 유틸
-- [ ] `Money` 값 객체(amount, currency — 초기 KRW 고정) + 단위 테스트
-- [ ] Flyway 기동 설정 + Testcontainers 베이스 클래스 + 모듈별 컨텍스트 로드 테스트
-- [ ] 결정: api 테스트에서 외부 호출(PG·공급사) 대역 방식 — HTTP 스텁 서버 라이브러리 vs mock 앱을 테스트에서 함께 기동 (미결 6)
-- [ ] README 초안: **실행 방법** (compose + gradle 커맨드), **Q1** 중 지금까지 결정한 기술 선택 이유
-- 완료 기준: `./gradlew test` 전 모듈 통과, `docker compose up` 후 세 앱 `/actuator/health` UP
+"clone 후 README 커맨드로 뜬다"를 만드는 Phase. 기능은 없다.
 
-## P1. 요금제 · 주문 — `phase/p1-order` — R-1
+- [x] README 뼈대, plan.md 커밋 (`main`의 `19c185b`)
+- [x] **P0-1** 브랜치 생성 + `docs/decisions.md`(지금까지의 결정)
+- [x] **P0-2** 설정 구조 + 테스트 인프라 (단일 모듈 상태에서)
+  - 의존성: Testcontainers PostgreSQL, Awaitility (Boot 4.1.1 공식 문서로 좌표 확인)
+  - `application.yml`(공통·비민감) / `application-local.yml`(ignore) / `application-local.yml.example` / `application-test.yml` / `application-prod.yml`(환경변수만), `.gitignore` 정리
+  - `compose.yaml`: postgres 포트 고정, DB명·계정 정리 (로컬 전용 값). **앱 3개를 compose에 넣는 것은 Dockerfile이 생기는 P4에서**
+  - Flyway 기동(마이그레이션 0개), `ddl-auto: validate`, `open-in-view: false`
+  - 테스트: Testcontainers 베이스 클래스 + 컨텍스트 로드가 실제 PostgreSQL로 통과
+- [x] **P0-3** Gradle 멀티모듈 전환
+  - 루트(공통 설정) + `roampass-api`(기존 `src`를 `git mv`) / `mock-pg` / `mock-supplier`(DB 없는 빈 Boot 앱). 모듈 간 코드 의존 없음
+  - `HELP.md`·`out/` 제거
+  - 테스트: 모듈별 컨텍스트 로드, mock 두 앱 `/actuator/health` UP
+- [x] **P0-4** `common` 공통 계층 (TDD)
+  - 도메인 예외 베이스, 에러 응답 + `@RestControllerAdvice`
+  - `UserId`/`AdminId` VO + ArgumentResolver (`/api/**`는 `X-User-Id`, `/admin/**`는 `X-Admin-Id` 필수, 없으면 401)
+  - `Clock` 빈, KST 변환 유틸
+  - 테스트: VO 검증, 헤더 누락 401·정상 주입(웹 슬라이스), KST 변환(자정 경계)
+- [x] **P0-5** `Money` 값 객체 (TDD): amount ≥ 0, 통화(초기 KRW), 같은 통화끼리만 연산·비교, 음수 결과 거부
+- [x] **P0-6** README 초안(**실행 방법**, **Q1** 지금까지의 기술 선택 이유) + decisions 갱신 + 이 체크리스트 갱신
+- 완료 기준: `./gradlew test` 전 모듈 통과, `docker compose up -d` 후 세 앱 `bootRun` → `/actuator/health` UP
+- 테스트 실행: Claude 쪽 환경은 Maven Central·Gradle 접속이 막혀 빌드 불가 → 모든 테스트를 사용자 Mac에서 `./gradlew test`로 실행하고, Claude가 `build/test-results`를 읽어 확인
+
+## P1. 요금제 · 주문 — `phase/p1-order` — 과제 2.3-①
 
 - [ ] `Plan` 도메인 + `GET /api/plans`(국가·일수·용량·sim_type 필터) + 시드 요금제 마이그레이션(이심/유심 × 국가 몇 개)
 - [ ] `Order` 도메인: 생성 시 `PENDING`, `OrderNo` 발급, 여행 시작일, 결제 대기 만료 시각(설정값, 기본 10분). 상태 전이 메서드와 `IllegalStateTransitionException`
@@ -45,7 +57,7 @@
 - [ ] README 초안: **Q2** 상태 목록 첫 버전(PENDING/EXPIRED), 아키텍처 절에 패키지 구조
 - 완료 기준: 요금제 조회 → 주문 생성 → 10분 후 만료가 테스트로 증명됨
 
-## P2. 결제 — `phase/p2-payment` — R-2, T-1
+## P2. 결제 — `phase/p2-payment` — 과제 2.3-②, 중복 통지 테스트
 
 중복 통지 1회 처리와 금액 검증이 핵심.
 
@@ -58,13 +70,13 @@
 - [ ] "결제 확정" 단일 유스케이스: 승인 응답 경로·웹훅 경로 공용. 결제 완료 → 주문 `PAID` (+ history)
 - [ ] 웹훅 수신 `POST /api/payments/webhook`: `CallbackLog` 선 INSERT → 중복 skip(200), **금액 ≠ 주문 금액이면 거절 + 이상 건 기록**
 - [ ] 승인 타임아웃·응답 유실: `REQUESTED`로 남은 결제를 스케줄러가 PG 상태 조회로 정리
-- [ ] **T-1 테스트: 같은 승인 통지 N개 동시 → payment 1건 APPROVED, 주문 PAID 1회** (스레드 수·결과를 README Q3에)
+- [ ] **필수 테스트(중복 통지): 같은 승인 통지 N개 동시 → payment 1건 APPROVED, 주문 PAID 1회** (스레드 수·결과를 README Q3에)
 - [ ] 테스트: 응답+웹훅 둘 다 와도 1회, 금액 불일치 거절, 승인 실패 시 주문 상태, 타임아웃 후 상태 조회로 확정
-- [ ] 결정: `event_key` 구성(미결 1), 승인 실패 후 재결제 허용 여부(미결 4)
+- [ ] 결정: `event_key` 구성(미결 1), 승인 실패 후 재결제 허용 여부(미결 4), api 테스트의 외부 호출 대역 방식(미결 6 — P2 시작 시)
 - [ ] README 초안: **Q3** 중복 처리 방식·테스트 결과, **Q4** 트랜잭션 경계(PG 호출은 밖, 타임아웃 시 확정 방법), **시연 방법** 중 PG 장애 주입
-- 완료 기준: T-1 통과, 장애 주입(지연·실패·중복·금액 변조)을 켠 상태에서도 결제가 정확히 1회만 처리됨
+- 완료 기준: 중복 통지 테스트 통과, 장애 주입(지연·실패·중복·금액 변조)을 켠 상태에서도 결제가 정확히 1회만 처리됨
 
-## P3. 발급(이심) · 실패 보상 — `phase/p3-issuance` — R-3-1 ~ R-3-4, T-2, T-3
+## P3. 발급(이심) · 실패 보상 — `phase/p3-issuance` — 과제 2.3-③ 이심, 중복 콜백·발급 실패 테스트
 
 - [ ] `SupplierClient` 포트(domain) 정의: 발급 요청 / 프로필 상태 조회 / 유심 개통. B-2를 위해 응답은 공급사 형식이 아닌 우리 도메인 타입으로
 - [ ] `mock-supplier` 모듈: `POST /mock/supplier/orders`(202 + `supplierOrderNo`, 몇 초 뒤 콜백 `X-Signature` HMAC-SHA256), `GET /mock/supplier/profiles/{iccid}`, `POST /mock/supplier/usim/activate`
@@ -75,12 +87,12 @@
 - [ ] 순서 뒤바뀜: 뒤 단계 상태에서 앞 단계 콜백은 무시 + 로그
 - [ ] **발급 실패 보상**: 공급사 실패 응답 또는 콜백 타임아웃(설정값) → `ISSUE_FAILED` → `RefundAttempt`(상한 + 지수 백오프) → `REFUNDED` / 상한 초과 `NEEDS_ATTENTION`
 - [ ] 발급 접수 실패(5xx·타임아웃) 재시도, "접수됐는데 우리 저장 실패"를 멱등 키로 흡수
-- [ ] **T-2 테스트: 같은 콜백 N개 동시 → sim_profile 1개**
-- [ ] **T-3 테스트: 결제됐는데 발급 실패 → RefundAttempt 기록 + 주문 상태 + history 흔적**
+- [ ] **필수 테스트(중복 콜백): 같은 콜백 N개 동시 → sim_profile 1개**
+- [ ] **필수 테스트(발급 실패): 결제됐는데 발급 실패 → RefundAttempt 기록 + 주문 상태 + history 흔적**
 - [ ] 테스트: 서명 불일치 401, 모르는 주문번호 거절, 순서 뒤바뀜 무시, 환불 상한 초과 → NEEDS_ATTENTION
 - [ ] 결정: 콜백 타임아웃 기본값, 환불 재시도 상한·간격(미결 3 일부)
 - [ ] README 초안: **Q2** 상태 전이도 확정판("결제됐는데 발급 안 된 주문은 어디 있고 누가 끝내는가", "브라우저를 닫으면"), **Q3**·**Q4** 공급사 부분 추가, **시연 방법** 중 공급사 장애 주입
-- 완료 기준: T-2·T-3 통과. 장애 주입을 켠 상태에서 결제 → 발급 → 실패 시 환불까지 사람 개입 없이 끝남
+- 완료 기준: 중복 콜백·발급 실패 테스트 통과. 장애 주입을 켠 상태에서 결제 → 발급 → 실패 시 환불까지 사람 개입 없이 끝남
 - **▶ 마일스톤: 프론트 "구매 흐름"(요금제 → 주문 → 결제 → 발급 대기) 연동 가능**
 
 ## P4. 1차 배포 — `phase/p4-deploy` — 2.5-②
@@ -94,9 +106,9 @@
 - [ ] 배포 환경에서 결제 → 웹훅 → 발급 → 콜백 왕복 확인, `docker stats`/`free -m` 실측 기록
 - [ ] 이후 Phase용 재배포 절차를 스크립트 또는 README 명령으로 고정 (B-3의 출발점)
 - [ ] README 초안: **배포** 절(어디에·왜·콜백 주소를 잡은 방법·막혔던 지점·실측 메모리), **Q1**에 호스팅 선택 이유
-- 완료 기준: 공개 URL로 `roampass-api` 헬스·요금제 조회 가능, 배포 환경에서 T-1~T-3 시나리오를 수동 재현 가능
+- 완료 기준: 공개 URL로 `roampass-api` 헬스·요금제 조회 가능, 배포 환경에서 중복 통지·중복 콜백·발급 실패 시나리오를 수동 재현 가능
 
-## P5. 어드민 — `phase/p5-admin` — R-5
+## P5. 어드민 — `phase/p5-admin` — 과제 2.3-⑤
 
 - [ ] `GET /admin/orders`: 결제 상태 · 발급/설치 상태 · SIM 종류 · 기간 필터 + 페이지네이션(DTO 프로젝션)
 - [ ] `GET /admin/orders/{orderNo}`: `status_history` 타임라인(언제·무엇·누가·어떤 신호) + 결제·프로필·환불 시도·콜백 로그
@@ -110,18 +122,18 @@
 - 완료 기준: 장애 주입으로 만든 "결제됐는데 발급 안 된 주문"을 어드민에서 찾아 조치할 수 있음
 - **▶ 마일스톤: 프론트 "어드민 화면" 연동 가능**
 
-## P6. 설치 · 사용 추적 — `phase/p6-tracking` — R-4, T-4
+## P6. 설치 · 사용 추적 — `phase/p6-tracking` — 과제 2.3-④, 만료일 테스트
 
 - [ ] `InstallStatus` 확장: `ISSUED → QR_VIEWED → INSTALLED → ACTIVE → EXPIRED`, 역행 금지. `DELETED` 처리 방식 결정(미결 5)
 - [ ] `POST /api/sims/{id}/qr-viewed`: 우리가 직접 기록하는 유일한 신호
 - [ ] 공급사 개통 이벤트 콜백 수신(`ENABLED`) + **폴링 보완** 스케줄러: 대상은 여행 시작일 ±N일인 미개통 SIM만, 주기 설정값. 콜백이 빠져도 폴링이 메운다
 - [ ] 만료 계산: `activatedAt(UTC)` + 요금제 일수 → KST 기준. "24h×N" vs "KST 날짜 N일" 결정(미결 2)
 - [ ] 환불 가능 판정: `INSTALLED/ACTIVE`면 불가, 판정 직전 공급사 상태 재조회(늦은 신호 대비). 사용자 주장과 공급사 상태가 다를 때의 규칙
-- [ ] **T-4 테스트: UTC → KST 만료일 계산(자정 경계 포함)**, 상태 역행 거부, 폴링 대상 선별, 콜백 누락 시 폴링으로 ACTIVE 전이
+- [ ] **권장 테스트(만료일): UTC → KST 만료일 계산(자정 경계 포함)**, 상태 역행 거부, 폴링 대상 선별, 콜백 누락 시 폴링으로 ACTIVE 전이
 - [ ] README 초안: **Q5** "설치했다"를 무엇으로 판단하는지(신호별 신뢰도, 콜백 누락 시 메우는 방법, 폴링 대상·주기, 신호가 틀렸을 때 사용자·운영자가 보는 것)
 - 완료 기준: 콜백 누락을 켜도 폴링으로 ACTIVE가 되고, 만료일이 KST 기준으로 맞음
 
-## P7. 유심 — `phase/p7-usim` — R-3-5, R-3-6
+## P7. 유심 — `phase/p7-usim` — 과제 2.3-③ 유심
 
 - [ ] 유심 주문은 결제 완료 시 `PICKUP_READY`(P2의 결제 확정 유스케이스에서 sim_type 분기)
 - [ ] `POST /api/orders/{orderNo}/usim/register` `{iccid}`: `Iccid` 값 객체(자릿수 19–20, Luhn 체크 디지트), 이미 등록된 ICCID 거절(UNIQUE) → 공급사 개통 요청 → `ACTIVE`
@@ -129,7 +141,7 @@
 - [ ] README 초안: **Q2** 유심 분기 추가, **시연 방법**에 ICCID 등록
 - 완료 기준: 잘못된/중복 ICCID가 거절되고 정상 ICCID로 개통까지 감
 
-## P8. 사용자 화면용 API · 프론트 연동 확인 — `phase/p8-user-api` — R-6
+## P8. 사용자 화면용 API · 프론트 연동 확인 — `phase/p8-user-api` — 과제 2.3-⑥
 
 - [ ] `GET /api/sims`(내 SIM 목록), `GET /api/sims/{id}`(결제 금액 · 발급/설치 상태 · QR/활성화 코드 · 남은 기간 · 환불 가능 여부)
 - [ ] 발급 대기 응답에 "발급이 늦을 때 사용자가 할 수 있는 일"에 필요한 정보(예상 상태·문의 경로) 포함
@@ -139,9 +151,9 @@
 
 ## P9. 제출 마감 — `phase/p9-submission` — 2.5, 부록 B
 
-- [ ] README **Q1~Q8** 다듬기. Q1(기술 선택 이유)·Q7(처음 써본 것, `docs/learning-log.md` 기반) 필수. Q8(시간이 더 있었다면)에 B-4~B-7과 미구현 항목
-- [ ] 동시성 테스트 실행 결과(T-1·T-2 스레드 수·결과) README에 첨부, ERD·상태 전이도(Mermaid) 정리
-- [ ] **미구현 · 타협** 절, **가정** 절, **투입 시간 · AI 사용처**(`docs/timelog.md` 기반) 작성
+- [ ] README **Q1~Q8** 다듬기. Q1(기술 선택 이유)·Q7(처음 써본 것) 필수. Q8(시간이 더 있었다면)에 제외한 가산점(데이터 사용량 알림·장기 미설치 관리·관측성)과 미구현 항목
+- [ ] 동시성 테스트 실행 결과(중복 통지·중복 콜백 테스트의 스레드 수·결과) README에 첨부, ERD·상태 전이도(Mermaid) 정리
+- [ ] **미구현 · 타협** 절, **가정** 절, **투입 시간 · AI 사용처** 작성
 - [ ] 최종 배포 점검: 두 화면 모두 공개 URL 접속, 배포 환경에서 장애 주입 시연 가능
 - [ ] 부록 B 체크리스트 10개 점검, 새 디렉터리에 `git clone` 후 README 커맨드만으로 실행 재현, `git log -p | grep -iE "password|secret"`
 - 완료 기준: 부록 B 10개 전부 체크
@@ -180,5 +192,5 @@ EXPIRED            PICKUP_READY ──ICCID 등록──▶ ACTIVE   ISSUE_FAILE
 | 3 | 콜백 타임아웃 · 환불 재시도 상한·간격 · 이상 건 기준 기본값 | P3, P5 |
 | 4 | 승인 실패 후 같은 주문 재결제 허용 여부(멱등 키 설계에 영향) | P2 |
 | 5 | 프로필 `DELETED`와 설치 상태 역행 금지의 조화 | P6 |
-| 6 | api 테스트의 외부 호출 대역 방식 | P0 |
+| 6 | api 테스트의 외부 호출 대역 방식 | P2 |
 | 7 | 인스턴스 B 공개 범위: 시연용 장애 주입 설정을 외부에 열지, 어떻게 보호할지 | P4 |

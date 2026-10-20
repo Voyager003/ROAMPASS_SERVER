@@ -53,3 +53,7 @@ roampass:
     batch-size: 50
     dispatch-fixed-delay: PT10S   # 발급 요청 스케줄러 간격(PAID 이심 → 공급사)
     timeout-fixed-delay: PT30S    # 콜백 대기 초과 검사 간격
+  tracking:
+    lookahead-days: 3          # 여행 시작일 3일 전부터 사용 기간 끝까지만 공급사 상태 조회
+    batch-size: 100
+    fixed-delay: PT1M          # 설치·개통 추적 폴링 간격

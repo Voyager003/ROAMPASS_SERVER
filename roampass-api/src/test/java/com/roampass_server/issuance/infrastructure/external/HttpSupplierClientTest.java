@@ -7,8 +7,10 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.net.SocketTimeoutException;
+import java.time.Instant;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,10 +21,13 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 import com.roampass_server.common.domain.OrderNo;
+import com.roampass_server.issuance.domain.model.Iccid;
 import com.roampass_server.issuance.domain.model.SupplierOrderNo;
 import com.roampass_server.issuance.domain.service.SupplierIssueRequest;
 import com.roampass_server.issuance.domain.service.SupplierIssueResult;
 import com.roampass_server.issuance.domain.service.SupplierIssueResult.Outcome;
+import com.roampass_server.issuance.domain.service.SupplierProfileResult;
+import com.roampass_server.issuance.domain.service.SupplierProfileState;
 
 @DisplayName("공급사 HTTP 어댑터")
 class HttpSupplierClientTest {
@@ -69,5 +74,31 @@ class HttpSupplierClientTest {
         assertThat(client.requestIssuance(REQUEST).outcome()).isEqualTo(Outcome.REJECTED);
         assertThat(client.requestIssuance(REQUEST).outcome()).isEqualTo(Outcome.UNKNOWN);
         assertThat(client.requestIssuance(REQUEST).outcome()).isEqualTo(Outcome.UNKNOWN);
+    }
+
+    @Test
+    @DisplayName("프로필 조회: 상태·개통 시각을 도메인 타입으로, 404면 NOT_FOUND, 5xx면 UNKNOWN")
+    void get_profile() {
+        // given
+        Iccid iccid = Iccid.of("8982300912345678902");
+        server.expect(requestTo("http://supplier.test/mock/supplier/profiles/8982300912345678902"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("""
+                        {"iccid":"8982300912345678902","state":"ENABLED","activatedAt":"2026-05-01T15:20:00Z","usedMb":12}
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://supplier.test/mock/supplier/profiles/8982300912345678902"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+        server.expect(requestTo("http://supplier.test/mock/supplier/profiles/8982300912345678902"))
+                .andRespond(withServerError());
+
+        // when
+        SupplierProfileResult found = client.getProfile(iccid);
+
+        // then
+        assertThat(found.state()).isEqualTo(SupplierProfileState.ENABLED);
+        assertThat(found.activatedAt()).isEqualTo(Instant.parse("2026-05-01T15:20:00Z"));
+        assertThat(found.usedMb()).isEqualTo(12);
+        assertThat(client.getProfile(iccid).outcome()).isEqualTo(SupplierProfileResult.Outcome.NOT_FOUND);
+        assertThat(client.getProfile(iccid).outcome()).isEqualTo(SupplierProfileResult.Outcome.UNKNOWN);
     }
 }

@@ -19,6 +19,9 @@ import com.roampass_server.issuance.application.IssuanceDispatchService;
 import com.roampass_server.issuance.application.IssuanceFailureService;
 import com.roampass_server.issuance.application.IssuanceStartService;
 import com.roampass_server.issuance.application.IssuanceTimeoutService;
+import com.roampass_server.issuance.application.ProfileSignalApplier;
+import com.roampass_server.issuance.application.ProfileTrackingService;
+import com.roampass_server.issuance.application.QrViewService;
 import com.roampass_server.issuance.domain.repository.IssuanceRequestRepository;
 import com.roampass_server.issuance.domain.repository.SimProfileRepository;
 import com.roampass_server.issuance.domain.service.SupplierClient;
@@ -31,7 +34,7 @@ import com.roampass_server.plan.application.PlanQueryService;
  * 발급 유스케이스·공급사 어댑터 빈 등록
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(IssuanceProperties.class)
+@EnableConfigurationProperties({IssuanceProperties.class, TrackingProperties.class})
 public class IssuanceConfig {
 
     @Bean
@@ -54,6 +57,26 @@ public class IssuanceConfig {
                                                     SupplierClient supplierClient, IssuanceProperties properties) {
         return new IssuanceDispatchService(orderRepository, requestRepository, startService, acceptanceService,
                 failureService, supplierClient, properties.batchSize());
+    }
+
+    @Bean
+    ProfileSignalApplier profileSignalApplier(SimProfileRepository profileRepository,
+                                              StatusHistoryRecorder historyRecorder, Clock clock) {
+        return new ProfileSignalApplier(profileRepository, historyRecorder, clock);
+    }
+
+    @Bean
+    ProfileTrackingService profileTrackingService(SimProfileRepository profileRepository,
+                                                  SupplierClient supplierClient, ProfileSignalApplier applier,
+                                                  Clock clock, TrackingProperties properties) {
+        return new ProfileTrackingService(profileRepository, supplierClient, applier, clock,
+                properties.lookaheadDays(), properties.batchSize());
+    }
+
+    @Bean
+    QrViewService qrViewService(OrderRepository orderRepository, SimProfileRepository profileRepository,
+                                StatusHistoryRecorder historyRecorder, Clock clock) {
+        return new QrViewService(orderRepository, profileRepository, historyRecorder, clock);
     }
 
     @Bean

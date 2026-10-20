@@ -47,7 +47,8 @@ class IssuanceFixture {
     final FakeStatusHistoryRepository histories = new FakeStatusHistoryRepository();
     final StatusHistoryRecorder recorder = new StatusHistoryRecorder(histories);
     final FakeIssuanceRequestRepository requests = new FakeIssuanceRequestRepository();
-    final FakeSimProfileRepository profiles = new FakeSimProfileRepository();
+    final FakeSimProfileRepository profiles = new FakeSimProfileRepository(
+            orderNo -> orders.findByOrderNo(orderNo).orElseThrow().travelStartDate());
     final FakeCallbackLogRepository callbackLogs = new FakeCallbackLogRepository();
     final FakeSupplierClient supplier = new FakeSupplierClient();
     final HmacSignature signer = new HmacSignature(SECRET);
@@ -64,6 +65,16 @@ class IssuanceFixture {
     final IssuanceCallbackService callbacks = new IssuanceCallbackService(signer, callbackLogs,
             new IssuanceCallbackProcessor(callbackLogs, requests, profiles, orders, planQuery, failure, recorder,
                     clock), clock);
+
+    final ProfileSignalApplier applier = new ProfileSignalApplier(profiles, recorder, clock);
+    final ProfileTrackingService tracking = new ProfileTrackingService(profiles, supplier, applier, clock, 3, 100);
+    final QrViewService qrView = new QrViewService(orders, profiles, recorder, clock);
+
+    /** 발급 완료(프로필 ISSUED)까지 진행, 여행 시작일 2026-10-25·사용 5일 */
+    void issued() {
+        String sup = dispatched();
+        sendCallback(issued("sevt_issued", sup));
+    }
 
     /** 결제가 끝난 이심 주문(PAID) + 승인된 결제 */
     Order paidEsimOrder() {

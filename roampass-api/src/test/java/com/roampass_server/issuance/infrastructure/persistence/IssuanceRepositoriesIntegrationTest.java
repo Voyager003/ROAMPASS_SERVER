@@ -5,6 +5,9 @@ import static com.roampass_server.support.PersistenceTestFixtures.pendingOrder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.LocalDate;
+import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -16,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.issuance.domain.model.ActivationCode;
 import com.roampass_server.issuance.domain.model.Iccid;
+import com.roampass_server.issuance.domain.model.InstallStatus;
 import com.roampass_server.issuance.domain.model.IssuanceRequest;
 import com.roampass_server.issuance.domain.model.IssuanceStatus;
 import com.roampass_server.issuance.domain.model.SimProfile;
@@ -126,6 +130,34 @@ class IssuanceRepositoriesIntegrationTest {
             assertThatThrownBy(() -> profileRepository.save(SimProfile.issueEsim(orderNo,
                     SupplierOrderNo.of("SUP-P-3"), Iccid.of("8982300912345678910"), CODE, 5, NOW)))
                     .isInstanceOf(DataIntegrityViolationException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("폴링 대상 조회는")
+    class Trackable {
+
+        @Test
+        @DisplayName("여행 시작일(10/25) 3일 전 ~ 시작일 + 사용 일수(5일) 사이의 미개통 프로필만, 개통되면 빠진다")
+        void window_and_status() {
+            // given
+            profileRepository.save(SimProfile.issueEsim(orderNo, SupplierOrderNo.of("SUP-T-1"),
+                    Iccid.of("8982300912345678902"), CODE, 5, NOW));
+
+            // when // then
+            assertThat(trackable(LocalDate.of(2026, 10, 21))).doesNotContain(orderNo);
+            assertThat(trackable(LocalDate.of(2026, 10, 22))).contains(orderNo);
+            assertThat(trackable(LocalDate.of(2026, 10, 30))).contains(orderNo);
+            assertThat(trackable(LocalDate.of(2026, 10, 31))).doesNotContain(orderNo);
+
+            SimProfile found = profileRepository.findByOrderNo(orderNo).orElseThrow();
+            assertThat(profileRepository.saveIfStatus(found.markActivated(NOW), InstallStatus.ISSUED)).isTrue();
+            assertThat(trackable(LocalDate.of(2026, 10, 22))).doesNotContain(orderNo);
+            assertThat(profileRepository.findByOrderNo(orderNo).orElseThrow().activatedAt()).isEqualTo(NOW);
+        }
+
+        private List<OrderNo> trackable(LocalDate today) {
+            return profileRepository.findTrackable(today, 3, 100).stream().map(SimProfile::orderNo).toList();
         }
     }
 }

@@ -109,13 +109,14 @@ P1의 `Plan`·`Order`·`StatusHistory` 위에 유스케이스·영속성·API를
 
 ## P5. 어드민 · 설치/사용 추적 · 유심 개통 — `phase/p5-ops` — 과제 2.3-④·⑤, 2.3-③ 유심, 만료일 테스트
 
-세 묶음을 한 Phase에서 최소한으로. 설치 상태 규칙·만료일 계산·환불 가능 판정·`Iccid` 검증·`PICKUP_READY` 전이는 P1에 있다.
+세 묶음을 한 Phase에서 최소한으로. 설치 상태 규칙·만료일 계산·환불 가능 판정·`Iccid` 검증·`PICKUP_READY` 전이는 P1에 있다. 묶음이 작아 단계마다 유스케이스부터 API까지 한 번에(계층별로 나누면 앱 기동 테스트 문제 반복, #61·#62).
 
-- [ ] **어드민(2.3-⑤)**: `GET /admin/orders`(결제·발급/설치 상태·SIM 종류·기간 필터, 페이지네이션), `GET /admin/orders/{orderNo}`(`status_history` 타임라인 + 결제·프로필·환불 시도·콜백 로그), `GET /admin/issues`(PAID 후 N분 미발급 / 환불 상한 초과 / 금액 불일치 / 서명 실패), `POST /admin/orders/{orderNo}/refund`·`/reissue`(조건부 UPDATE로 1회, `X-Admin-Id`·사유 필수, history), 응답에 `asOf`. 테스트: 두 운영자 동시 환불 → 1회
-- [ ] **설치·사용 추적(2.3-④)**: `POST /api/sims/{id}/qr-viewed`, 공급사 상태 조회 **폴링** 스케줄러(대상: 미개통·미만료 SIM만, 주기 설정값)로 `INSTALLED`/`ENABLED`/`DELETED` 반영, 환불 요청 시 판정 직전 공급사 상태 재조회. **만료일 테스트**: 개통 → KST 만료일 저장·응답 통합 테스트, 폴링 대상 선별
-- [ ] **유심 개통(2.3-③ 유심)**: `mock-supplier` `POST /mock/supplier/usim/activate`, `POST /api/orders/{orderNo}/usim/register` `{iccid}`(잘못된 ICCID 400, 중복 ICCID 거절 — 동시 등록 포함) → 공급사 개통 → `ISSUED` + 프로필 `ACTIVE`
-- [ ] 결정: 이상 건 기준값(미결 3 나머지), 부분 환불 허용 여부
-- [ ] 문서: README **2.2** 운영자 조치·유심 분기, **2.5**(설치 판단: 신호별 신뢰도·폴링 대상·주기·신호가 틀렸을 때), **2.6** 어드민 쪽(`asOf`), **시연 방법** 설치·개통 흉내·ICCID 등록
+- [x] **P5-1** 설치·사용 추적(2.3-④): `SupplierClient.getProfile` 포트·어댑터, 폴링 스케줄러(미개통 SIM 중 여행 시작일 3일 전 ~ 시작일+사용일수 창 안만, 1분 주기)로 `INSTALLED`/`ENABLED`/`DELETED` 반영, `POST /api/sims/{orderNo}/qr-viewed`, **만료일 통합 테스트**(부록 A 예시)
+- [ ] **P5-2** 유심 개통(2.3-③): `mock-supplier` `POST /mock/supplier/usim/activate`, `POST /api/orders/{orderNo}/usim/register` `{iccid}`(잘못된 ICCID 400, 중복 ICCID 409 — 동시 등록 포함) → 프로필 생성·주문 `ISSUED` → 공급사 개통 → `ACTIVE`(응답 유실은 폴링이 메움)
+- [ ] **P5-3** 어드민 조회(2.3-⑤): `V5` `callback_log.order_no`, `GET /admin/orders`(상태·SIM 종류·기간 필터, 페이지네이션 최대 50), `GET /admin/orders/{orderNo}`(이력 타임라인 + 결제·프로필·환불 시도·발급 요청·콜백 기록), 응답에 `asOf`
+- [ ] **P5-4** 이상 건 + 운영자 조치(2.3-⑤·④): `GET /admin/issues`(결제 후 5분 미발급 / `NEEDS_ATTENTION` / 금액 불일치 / 서명 실패), `POST /admin/orders/{orderNo}/refund`(전액)·`/reissue`(`X-Admin-Id`·사유 필수, 조건부 UPDATE로 1회, history), 환불 직전 공급사 상태 재조회. 테스트: 두 운영자 동시 환불 → 1회
+- [ ] **P5-5** 문서: README **2.2** 남은 _(구현 예정)_, **2.5**(설치 판단: 신호별 신뢰도·폴링 대상·주기·신호가 틀렸을 때), **2.6** 어드민 쪽(`asOf`), **시연 방법** 설치·개통 흉내·ICCID 등록, decisions
+- [x] 결정: 폴링은 여행 시작일 창 안의 미개통 SIM만 1분, 이상 건 기준 결제 후 5분 미발급, 수동 환불은 전액만, 어드민 목록은 행별 추가 조회(N+1) + 페이지 최대 50
 - 완료 기준: 장애 주입으로 만든 "결제됐는데 발급 안 된 주문"을 어드민에서 찾아 조치. 콜백 없이 폴링만으로 ACTIVE. 만료일 KST 기준. 잘못된/중복 ICCID 거절 후 정상 ICCID로 개통
 - **▶ 마일스톤: 프론트 "어드민 화면"·"내 SIM" 연동 가능**
 
@@ -173,7 +174,7 @@ EXPIRED            PICKUP_READY ──ICCID 등록──▶ ACTIVE   ISSUE_FAILE
 |---|---|---|
 | 1 | 콜백 `event_key`: 공급사 ID 기반 vs 본문 해시 — "같은 이벤트가 내용만 조금 달라 다시 오면?" | P3 — **결정됨**: 발신 측 이벤트 ID(`PG:{eventId}`), 재발송도 같은 ID |
 | 2 | 만료일: `activatedAt + 24h×N` vs KST 날짜 N일 | P1 — **결정됨**: 24시간 × N, 표시는 KST (decisions #48) |
-| 3 | 콜백 타임아웃 · 환불 재시도 상한·간격 · 이상 건 기준 기본값 | P4 — **일부 결정됨**: 콜백 대기 2분, 환불 최대 3회·1분부터 2배 (decisions #84·#85). 이상 건 기준은 P5 |
+| 3 | 콜백 타임아웃 · 환불 재시도 상한·간격 · 이상 건 기준 기본값 | P4·P5 — **결정됨**: 콜백 대기 2분, 환불 최대 3회·1분부터 2배 (decisions #84·#85), 이상 건 기준 결제 후 5분 미발급 |
 | 4 | 승인 실패 후 같은 주문 재결제 허용 여부(멱등 키 설계에 영향) | P1 — **결정됨**: PENDING 유지·재결제 허용, 승인 결제는 주문당 최대 1건 (decisions #38) |
 | 5 | 프로필 `DELETED`와 설치 상태 역행 금지의 조화 | P1 — **결정됨**: 상태 유지 + `deletedAt` 기록 (decisions #50) |
 | 6 | api 테스트의 외부 호출 대역 방식 | P3 — **결정됨**: 유스케이스·E2E는 Fake `PgClient` 빈, HTTP 어댑터는 `MockRestServiceServer` |

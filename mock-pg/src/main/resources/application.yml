@@ -10,3 +10,12 @@ mock-pg:
     # 로컬 개발용 기본값. 배포 환경은 PG_WEBHOOK_SECRET 환경변수로 교체(roampass-api와 같은 값)
     secret: ${PG_WEBHOOK_SECRET:local-dev-webhook-secret}
     delay: 300ms                   # 승인 응답 후 웹훅 발송까지 지연
+
+  # 장애 주입 시작값(전부 0/false = 장애 없음). 실행 중 변경은 PUT /mock/pg/config, 초기화는 POST /mock/pg/config/reset
+  faults:
+    approve-failure-rate: 0        # 승인 실패 확률(0~1)
+    response-delay-ms: 0           # 승인 응답 지연(ms), 결제는 먼저 기록
+    webhook-duplicates: 0          # 같은 웹훅 추가 발송 횟수
+    webhook-drop: false            # 웹훅 생략
+    webhook-amount-delta: 0        # 웹훅 금액 변조 차액
+    cancel-failure-rate: 0         # 취소 실패 확률(0~1)

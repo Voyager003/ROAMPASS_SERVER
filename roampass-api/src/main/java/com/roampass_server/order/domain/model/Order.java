@@ -69,6 +69,21 @@ public final class Order {
                 OrderStatus.PENDING, now, now.plus(paymentWindow), null);
     }
 
+    /**
+     * 저장된 값으로 주문 복원. 생성 규칙(여행 시작일 범위 등)은 다시 검사하지 않음
+     * 지난 여행일의 기존 주문도 읽을 수 있어야 하기 때문
+     */
+    public static Order restore(Long id, OrderNo orderNo, UserId userId, Long planId, SimType simType, Money amount,
+                                LocalDate travelStartDate, OrderStatus status, Instant createdAt, Instant expiresAt,
+                                Instant issuedAt) {
+        if (orderNo == null || userId == null || planId == null || simType == null || amount == null
+                || travelStartDate == null || status == null || createdAt == null || expiresAt == null) {
+            throw new InvalidValueException("INVALID_ORDER", "Stored order is missing required values");
+        }
+        return new Order(id, orderNo, userId, planId, simType, amount, travelStartDate, status, createdAt, expiresAt,
+                issuedAt);
+    }
+
     // "오늘"은 UTC 날짜가 아닌 한국의 운영일
     private static void validateTravelStartDate(LocalDate travelStartDate, Instant now) {
         LocalDate todayKst = KoreaTime.toDate(now);

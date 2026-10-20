@@ -66,3 +66,8 @@
 | 59 | 2026-10-20 | 동시 상태 변경 방지는 조건부 UPDATE(`WHERE order_no=? AND status=?`, 영향 행 0이면 이미 변경됨). 리포지토리 메서드 `saveIfStatus(order, expected)` | `@Version` 낙관적 락 | 만료 스케줄러와 결제 확정이 같은 주문을 동시에 바꿀 때 한쪽만 성공. 도메인에 version 필드가 필요 없고, 실패가 예외가 아닌 결과값이라 "이미 처리됨"을 자연스럽게 건너뜀 |
 | 60 | 2026-10-20 | API 응답 시각은 UTC ISO-8601(`...Z`)만 제공, 표시 시간대 변환은 프론트 책임 | UTC + KST 문자열 함께 제공 | 서버 응답 형식을 하나로 유지 |
 | 61 | 2026-10-20 | application 서비스의 빈 등록(`@Service`)은 리포지토리 구현체가 생기는 영속성 단계에서 추가. 그 전에는 생성자로 직접 만들어 Fake로 테스트 | 처음부터 `@Service` | 구현체 없이 빈으로 등록하면 애플리케이션 기동 테스트가 컨텍스트 로딩에서 실패하고, "테스트 실패 상태로 커밋 금지" 규칙을 지킬 수 없음 |
+| 62 | 2026-10-20 | P2 이후 Phase의 순서는 application(Fake) → **영속성(+서비스 빈 등록)** → API | application → API → 영속성 + 임시 가짜 빈 | 컨트롤러는 서비스 빈이, 서비스 빈은 리포지토리 구현이 필요해 API를 먼저 만들면 애플리케이션 기동 테스트가 실패. "스키마는 도메인 확정 후"라는 원래 취지는 P1에서 이미 충족 |
+| 63 | 2026-10-20 | 스키마: `plan`·`orders`·`status_history`, 상태·종류는 VARCHAR(enum 이름), 시각은 TIMESTAMPTZ, 금액은 BIGINT + 통화 VARCHAR(3). 인덱스 `orders(status, expires_at)`, `orders(user_id, created_at)`, `status_history(order_no, occurred_at, id)`. 국가 코드는 `VARCHAR(2)` | PostgreSQL enum 타입, `CHAR(2)` | enum 이름 문자열은 상태 추가 시 마이그레이션이 필요 없음. `CHAR`는 Hibernate `ddl-auto: validate`가 String 필드와 타입 불일치로 판단 |
+| 64 | 2026-10-20 | 요금제 검색은 Spring Data `Specification`으로 주어진 조건만 조합 | null 허용 파라미터를 쓰는 JPQL(`:x is null or ...`) | null 파라미터가 섞인 쿼리는 PostgreSQL에서 파라미터 타입 추론 오류가 날 수 있음 |
+| 65 | 2026-10-20 | 조건부 UPDATE는 JPQL 벌크 UPDATE(`update ... where order_no = :no and status = :expected`) + 영향 행 수 확인, 실행 전후 영속성 컨텍스트 flush·clear | 엔티티 조회 후 dirty checking | dirty checking은 "읽은 뒤 쓰기" 사이에 다른 트랜잭션의 변경을 덮어쓸 수 있음. 벌크 UPDATE는 DB가 조건 검사와 변경을 한 번에 수행 |
+| 66 | 2026-10-20 | 주문 저장은 `saveAndFlush`로 즉시 INSERT | `save`(커밋 시점에 INSERT) | 주문번호 유니크 위반을 저장 호출 지점에서 바로 드러내 원인 추적이 쉬움 |

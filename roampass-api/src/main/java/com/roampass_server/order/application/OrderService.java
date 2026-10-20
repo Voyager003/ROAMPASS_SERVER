@@ -23,7 +23,7 @@ import com.roampass_server.plan.domain.model.Plan;
 
 /**
  * 주문 생성·조회 유스케이스. 주문 저장과 이력 기록은 같은 트랜잭션
- * 빈 등록은 저장소 구현체가 생기는 영속성 단계(P2-5)에서 추가
+ * 빈 등록은 OrderConfig(설정값 주입)
  */
 public class OrderService {
 

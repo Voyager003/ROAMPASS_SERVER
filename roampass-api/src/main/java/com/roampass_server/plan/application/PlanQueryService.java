@@ -3,6 +3,7 @@ package com.roampass_server.plan.application;
 import java.util.Comparator;
 import java.util.List;
 
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.roampass_server.common.application.exception.NotFoundException;
@@ -14,8 +15,8 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 요금제 조회 유스케이스. 다른 도메인(주문)도 요금제가 필요하면 이 서비스를 통해 조회
- * 빈 등록(@Service)은 PlanRepository 구현체가 생기는 영속성 단계(P2-5)에서 추가
  */
+@Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PlanQueryService {

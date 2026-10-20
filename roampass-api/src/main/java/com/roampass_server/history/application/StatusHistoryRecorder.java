@@ -2,6 +2,8 @@ package com.roampass_server.history.application;
 
 import java.time.Instant;
 
+import org.springframework.stereotype.Component;
+
 import com.roampass_server.common.domain.Actor;
 import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.history.domain.model.HistoryTarget;
@@ -12,8 +14,8 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 상태 변경 이력 기록 창구. 다른 도메인의 유스케이스가 상태를 바꾼 같은 트랜잭션 안에서 호출
- * 빈 등록(@Component)은 저장소 구현체가 생기는 영속성 단계(P2-5)에서 추가
  */
+@Component
 @RequiredArgsConstructor
 public class StatusHistoryRecorder {
 

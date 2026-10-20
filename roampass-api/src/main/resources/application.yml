@@ -18,3 +18,9 @@ spring:
     locations: classpath:db/migration
 server:
   port: 8080
+
+roampass:
+  order:
+    payment-window: 10m        # 주문 생성 후 결제 대기 시간
+    expiration:
+      batch-size: 100          # 만료 스케줄러 1회 최대 처리 건수

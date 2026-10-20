@@ -15,7 +15,7 @@ import com.roampass_server.order.domain.repository.OrderRepository;
 /**
  * 결제 대기 만료 유스케이스. 스케줄러가 주기적으로 호출
  * 대상 조회 후 저장 직전까지 다른 쪽(결제 확정)이 상태를 바꿀 수 있으므로 조건부 저장으로 한쪽만 성공
- * 빈 등록은 저장소 구현체가 생기는 영속성 단계(P2-5)에서 추가
+ * 빈 등록은 OrderConfig(설정값 주입)
  */
 public class OrderExpirationService {
 

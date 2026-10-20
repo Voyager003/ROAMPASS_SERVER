@@ -442,6 +442,45 @@ class OrderTest {
     }
 
     @Nested
+    @DisplayName("저장된 값으로 복원하면")
+    class Restore {
+
+        @Test
+        @DisplayName("모든 값을 그대로 가진다")
+        void keeps_all_values() {
+            // when
+            Order order = Order.restore(7L, ORDER_NO, USER, 1L, SimType.ESIM, Money.krw(12_000), TODAY_KST.plusDays(3),
+                    OrderStatus.ISSUED, NOW, NOW.plus(WINDOW), NOW.plusSeconds(120));
+
+            // then
+            assertThat(order.id()).isEqualTo(7L);
+            assertThat(order.status()).isEqualTo(OrderStatus.ISSUED);
+            assertThat(order.issuedAt()).isEqualTo(NOW.plusSeconds(120));
+            assertThat(order.expiresAt()).isEqualTo(NOW.plus(WINDOW));
+        }
+
+        @Test
+        @DisplayName("여행 시작일이 이미 지난 기존 주문도 복원된다 (생성 규칙은 다시 검사하지 않음)")
+        void does_not_revalidate_creation_rules() {
+            // when
+            Order order = Order.restore(7L, ORDER_NO, USER, 1L, SimType.ESIM, Money.krw(12_000), LocalDate.of(2020, 1, 1),
+                    OrderStatus.ISSUED, NOW, NOW.plus(WINDOW), NOW);
+
+            // then
+            assertThat(order.travelStartDate()).isEqualTo(LocalDate.of(2020, 1, 1));
+        }
+
+        @Test
+        @DisplayName("필수값이 없으면 거부된다")
+        void rejects_missing_required_values() {
+            // when & then
+            assertThatThrownBy(() -> Order.restore(7L, ORDER_NO, USER, 1L, SimType.ESIM, Money.krw(12_000), TODAY_KST,
+                    null, NOW, NOW.plus(WINDOW), null))
+                    .isInstanceOf(InvalidValueException.class);
+        }
+    }
+
+    @Nested
     @DisplayName("소유자·동등성")
     class OwnershipAndEquality {
 

@@ -60,6 +60,18 @@ public final class Payment {
                 null, Money.zero(amount.currency()), null, now, null);
     }
 
+    /** 저장소에서 읽은 값으로 복원. 생성 규칙은 다시 검사하지 않고 필수값만 확인 */
+    public static Payment restore(Long id, OrderNo orderNo, IdempotencyKey idempotencyKey, Money amount,
+                                  PaymentStatus status, PgTid pgTid, Money cancelledAmount, String failureReason,
+                                  Instant requestedAt, Instant approvedAt) {
+        if (orderNo == null || idempotencyKey == null || amount == null || status == null
+                || cancelledAmount == null || requestedAt == null) {
+            throw new InvalidValueException("INVALID_PAYMENT", "Stored payment is missing required values");
+        }
+        return new Payment(id, orderNo, idempotencyKey, amount, status, pgTid, cancelledAmount, failureReason,
+                requestedAt, approvedAt);
+    }
+
     /**
      * 승인 통지(PG 응답 또는 웹훅) 반영
      * 같은 승인이 이미 반영되어 있으면 {@code this}를 그대로 반환

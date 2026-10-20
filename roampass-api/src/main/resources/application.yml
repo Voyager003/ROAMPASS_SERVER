@@ -27,3 +27,6 @@ roampass:
     expiration:
       batch-size: 100          # 만료 스케줄러 1회 최대 처리 건수
       fixed-delay: PT30S       # 만료 스케줄러 실행 간격(ISO-8601, 이전 실행 종료 기준)
+  pg:
+    # 로컬 개발용 기본값. 배포 환경은 PG_WEBHOOK_SECRET 환경변수로 교체(mock-pg와 같은 값)
+    webhook-secret: ${PG_WEBHOOK_SECRET:local-dev-webhook-secret}

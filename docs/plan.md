@@ -51,18 +51,18 @@
 모든 집합 루트와 값 객체를 **순수 Java**로 만들고 단위 테스트로 규칙을 고정하는 Phase. application·api·JPA·mock 서버는 만들지 않는다.
 여기서 정한 상태와 전이 규칙이 README 2.2(상태 설계)의 원본이 된다. 이후 Phase에서 도메인을 고쳐야 하면 그 Phase에서 `refactor`/`fix` 커밋으로 고친다.
 
-- [ ] **P1-1** `Plan`, `PlanSpec`, `SimType`(공유 커널) — 국가 코드(ISO alpha-2)·일수·용량 검증, 가격 0원 거부, id 기준 동등성
-- [ ] **P1-2** `Order`, `OrderNo`, `OrderStatus`, 주문번호 생성기 포트
+- [x] **P1-1** `Plan`, `PlanSpec`, `SimType`(공유 커널) — 국가 코드(ISO alpha-2)·일수·용량 검증, 가격 0원 거부, id 기준 동등성
+- [x] **P1-2** `Order`, `OrderNo`, `OrderStatus`, 주문번호 생성기 포트
   - 전체 상태와 전이 규칙: `PENDING → PAID → ISSUE_REQUESTED → ISSUED`, `PAID → PICKUP_READY`(유심), `PENDING → EXPIRED`, `ISSUE_REQUESTED → ISSUE_FAILED → REFUNDED / NEEDS_ATTENTION` 등
   - 생성 시 요금제 가격·SIM 종류 복사, 결제 대기 만료 시각, 여행 시작일(KST 오늘~1년), 조회 시점 만료 판정
-- [ ] **P1-3** `Payment`, `PaymentStatus`, `IdempotencyKey`, `PgTid` — 승인 멱등(이미 승인이면 no-op), 금액 일치 검증, 전액·부분 취소(취소 누적 ≤ 승인 금액)
-- [ ] **P1-4** `RefundAttempt`, `RefundStatus`, `RetryPolicy` — 재시도 상한, 지수 백오프로 다음 시도 시각 계산, 상한 초과 시 운영자 확인 대상
-- [ ] **P1-5** `SimProfile`, `Iccid`(자릿수 19–20 + Luhn), `ActivationCode`, `InstallStatus`, `UsagePeriod`
+- [x] **P1-3** `Payment`, `PaymentStatus`, `IdempotencyKey`, `PgTid` — 승인 멱등(이미 승인이면 no-op), 금액 일치 검증, 전액·부분 취소(취소 누적 ≤ 승인 금액)
+- [x] **P1-4** `RefundAttempt`, `RefundStatus`, `RetryPolicy` — 재시도 상한, 지수 백오프로 다음 시도 시각 계산, 상한 초과 시 운영자 확인 대상
+- [x] **P1-5** `SimProfile`, `Iccid`(자릿수 19–20 + Luhn), `ActivationCode`, `InstallStatus`, `UsagePeriod`
   - 설치 상태 `ISSUED → QR_VIEWED → INSTALLED → ACTIVE → EXPIRED` 역행 금지, `DELETED` 처리
   - `activatedAt`(UTC) + 일수 → KST 만료일, 남은 기간, 환불 가능 판정(설치·개통 후 불가)
-- [ ] **P1-6** `StatusHistory`, `Actor`(`USER`/`SYSTEM`/`ADMIN:{id}`/`PG`/`SUPPLIER`, 공유 커널), `HistoryTarget` — 추가만 가능한 기록
-- [ ] **P1-7** 문서: README **2.2** 상태 설계(주문·결제·설치 상태와 전이도), 데이터 용량은 총량(MB)이라는 가정, decisions, 이 체크리스트
-- [ ] 결정: 만료일 정의(미결 2), 승인 실패 후 재결제 허용(미결 4), 프로필 `DELETED` 처리(미결 5)
+- [x] **P1-6** `StatusHistory`, `Actor`(`USER`/`SYSTEM`/`ADMIN:{id}`/`PG`/`SUPPLIER`, 공유 커널), `HistoryTarget` — 추가만 가능한 기록
+- [x] **P1-7** 문서: README **2.2** 상태 설계(주문·결제·설치 상태와 전이도), 데이터 용량은 총량(MB)이라는 가정, decisions, 이 체크리스트
+- [x] 결정: 만료일 정의(미결 2), 승인 실패 후 재결제 허용(미결 4), 프로필 `DELETED` 처리(미결 5) — decisions #38, #48, #50
 - 완료 기준: 모든 집합 루트의 생성 규칙·상태 전이·불변식이 단위 테스트로 증명됨. Spring 없이 테스트가 돈다
 
 ## P2. 요금제 · 주문 — `phase/p2-order` — 과제 2.3-①

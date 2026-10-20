@@ -9,8 +9,8 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 import com.roampass_server.common.domain.UserId;
 
 /**
- * Injects {@link UserId} into controller methods that declare it.
- * The header is required only for such methods, so public endpoints (e.g. plan listing) need no header.
+ * {@link UserId}를 선언한 컨트롤러 메서드에 값 주입
+ * 헤더는 그런 메서드에서만 필수라서 공개 API(예: 요금제 목록)는 헤더 없이 호출 가능
  */
 public class UserIdArgumentResolver implements HandlerMethodArgumentResolver {
 

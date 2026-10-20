@@ -8,14 +8,14 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * Requires a well-formed X-Admin-Id on every /admin/** request, even when the controller
- * method does not declare an {@link AdminId} parameter (fail-closed for new admin endpoints).
+ * 모든 /admin/** 요청에 형식이 올바른 X-Admin-Id 필수
+ * 컨트롤러 메서드에 {@link AdminId} 파라미터가 없어도 적용(새 어드민 API도 기본 차단)
  */
 public class AdminAuthInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-        // Let CORS preflight requests through; browsers never attach custom headers to them.
+        // CORS preflight 요청은 통과. 브라우저는 preflight에 사용자 정의 헤더를 붙이지 않음
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return true;
         }
@@ -23,7 +23,7 @@ public class AdminAuthInterceptor implements HandlerInterceptor {
         if (value == null) {
             throw new MissingAuthHeaderException("MISSING_ADMIN_ID", AuthHeaders.ADMIN_ID);
         }
-        AdminId.of(value); // validates the format; throws InvalidValueException (400) if malformed
+        AdminId.of(value); // 형식 검증, 형식이 틀리면 InvalidValueException(400)
         return true;
     }
 }

@@ -9,8 +9,8 @@ import com.roampass_server.common.domain.InvalidValueException;
 import com.roampass_server.common.domain.UserId;
 
 /**
- * Test-only endpoints that exercise the common web layer
- * (header resolvers, admin interceptor, exception handler) without any real feature.
+ * 공통 웹 계층(헤더 리졸버, 어드민 인터셉터, 예외 핸들러)을 실제 기능 없이 검증하기 위한
+ * 테스트 전용 엔드포인트
  */
 @RestController
 class WebLayerTestController {

@@ -5,8 +5,8 @@ import java.util.regex.Pattern;
 import com.roampass_server.common.domain.InvalidValueException;
 
 /**
- * Transaction id assigned by the PG on approval. Needed for cancels and status lookups.
- * The format is the PG's, so only "non-blank, no whitespace, reasonable length" is enforced.
+ * 승인 시 PG가 부여하는 거래 ID, 취소와 상태 조회에 필요
+ * 형식은 PG가 정하므로 "비어 있지 않음, 공백 없음, 적당한 길이"만 검사
  */
 public record PgTid(String value) {
 

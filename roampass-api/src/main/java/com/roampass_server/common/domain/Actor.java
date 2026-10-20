@@ -1,9 +1,9 @@
 package com.roampass_server.common.domain;
 
 /**
- * Subject of a state change, recorded in status history: {@code USER:{id}}, {@code ADMIN:{id}},
- * {@code SYSTEM}, {@code PG} or {@code SUPPLIER}. Users and operators carry their identifier;
- * the others are identified by type alone.
+ * 상태를 바꾼 주체, 상태 변경 이력에 기록: {@code USER:{id}}, {@code ADMIN:{id}},
+ * {@code SYSTEM}, {@code PG}, {@code SUPPLIER}. 사용자·운영자는 식별자 보유,
+ * 나머지는 종류만으로 구분
  */
 public record Actor(ActorType type, String id) {
 
@@ -15,7 +15,7 @@ public record Actor(ActorType type, String id) {
             throw new InvalidValueException(CODE, "Actor type is required");
         }
         switch (type) {
-            case USER -> UserId.of(id);   // validates the identifier format
+            case USER -> UserId.of(id);   // 식별자 형식 검증
             case ADMIN -> AdminId.of(id);
             default -> {
                 if (id != null) {
@@ -45,7 +45,7 @@ public record Actor(ActorType type, String id) {
         return new Actor(ActorType.SUPPLIER, null);
     }
 
-    /** Restores an actor from its {@link #asString()} form. */
+    /** {@link #asString()} 형태의 문자열에서 Actor 복원 */
     public static Actor parse(String raw) {
         if (raw == null || raw.isEmpty()) {
             throw new InvalidValueException(CODE, "Actor must not be empty");

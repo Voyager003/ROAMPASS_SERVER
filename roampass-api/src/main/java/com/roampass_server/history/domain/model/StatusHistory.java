@@ -7,11 +7,11 @@ import com.roampass_server.common.domain.InvalidValueException;
 import com.roampass_server.common.domain.OrderNo;
 
 /**
- * One status change: when, what (target, from → to), who or which signal (actor), and why (reason).
- * Append-only — there are no mutators. Every entry carries the order number so the admin timeline can show
- * order, payment, refund and SIM changes of one order in a single list.
- * Statuses are stored by enum name because different lifecycles (order, payment, install) share this record.
- * Operator actions must state a reason (assignment 2.3-⑤).
+ * 상태 변경 한 건: 언제, 무엇이(대상, 이전 → 이후), 누가 또는 어떤 신호로(주체), 왜(사유)
+ * 추가 전용, 수정 메서드 없음. 모든 기록에 주문번호를 두어 어드민 타임라인에서
+ * 주문 하나의 주문·결제·환불·SIM 변경을 한 목록으로 조회
+ * 주문·결제·설치처럼 서로 다른 상태 흐름이 함께 쓰므로 상태는 enum 이름으로 저장
+ * 운영자 조치는 사유 필수(과제 2.3-⑤)
  */
 public final class StatusHistory {
 
@@ -40,7 +40,7 @@ public final class StatusHistory {
     }
 
     /**
-     * @param from previous status, or {@code null} when the target was just created
+     * @param from 이전 상태. 대상이 막 생성된 경우 {@code null}
      */
     public static StatusHistory record(OrderNo orderNo, HistoryTarget target, Enum<?> from, Enum<?> to,
                                        Actor actor, String reason, Instant occurredAt) {

@@ -9,9 +9,9 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 import com.roampass_server.common.domain.AdminId;
 
 /**
- * Injects {@link AdminId} into controller methods that declare it.
- * Presence of the header on /admin/** is already enforced by {@link AdminAuthInterceptor};
- * the null check here covers admin-id parameters used outside that path.
+ * {@link AdminId}를 선언한 컨트롤러 메서드에 값 주입
+ * /admin/** 경로의 헤더 존재 여부는 {@link AdminAuthInterceptor}가 먼저 확인,
+ * 여기의 null 검사는 그 경로 밖에서 AdminId 파라미터를 쓰는 경우 대비
  */
 public class AdminIdArgumentResolver implements HandlerMethodArgumentResolver {
 

@@ -10,12 +10,12 @@ import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.common.domain.SimType;
 
 /**
- * The SIM handed out for an order (aggregate root, one per order). Immutable; identity is the order number.
+ * 주문에 대해 내준 SIM(집합 루트, 주문당 1개). 불변, 식별은 주문번호
  * <ul>
- *   <li>Install status only moves forward; late or duplicate signals return {@code this} unchanged.</li>
- *   <li>Activation fixes the usage period (activatedAt + days × 24h).</li>
- *   <li>A SIM is refundable only if it was never installed or activated (QR viewing alone does not count).</li>
- *   <li>Deletion from the device is recorded as {@code deletedAt}; the status keeps the furthest stage reached.</li>
+ *   <li>설치 상태는 앞으로만 진행, 늦거나 중복된 신호는 {@code this}를 그대로 반환</li>
+ *   <li>개통 시점에 사용 기간 확정(activatedAt + 일수 × 24시간)</li>
+ *   <li>한 번도 설치·개통되지 않은 SIM만 환불 가능(QR 열람만으로는 설치가 아님)</li>
+ *   <li>기기에서 삭제되면 {@code deletedAt}으로 기록, 상태는 도달한 가장 먼 단계 유지</li>
  * </ul>
  */
 public final class SimProfile {
@@ -54,7 +54,7 @@ public final class SimProfile {
         this.deletedAt = deletedAt;
     }
 
-    /** eSIM profile created from the supplier's issuance callback. */
+    /** 공급사 발급 콜백으로 만드는 이심 프로필 */
     public static SimProfile issueEsim(OrderNo orderNo, SupplierOrderNo supplierOrderNo, Iccid iccid,
                                        ActivationCode activationCode, int usageDays, Instant now) {
         if (supplierOrderNo == null || activationCode == null) {
@@ -65,7 +65,7 @@ public final class SimProfile {
                 InstallStatus.ISSUED, now, null, null, null, null);
     }
 
-    /** USIM profile created when the user registers the ICCID printed on the card picked up at the airport. */
+    /** 공항에서 받은 카드에 인쇄된 ICCID를 사용자가 등록할 때 만드는 유심 프로필 */
     public static SimProfile registerUsim(OrderNo orderNo, Iccid iccid, int usageDays, Instant now) {
         validateCommon(orderNo, iccid, usageDays, now);
         return new SimProfile(null, orderNo, SimType.USIM, iccid, null, null, usageDays,
@@ -86,7 +86,7 @@ public final class SimProfile {
             throw new IllegalStateTransitionException("SimProfile", status, InstallStatus.QR_VIEWED + " (USIM has no QR)");
         }
         if (!InstallStatus.QR_VIEWED.isBeyond(status)) {
-            return this; // already there or further along
+            return this; // 이미 그 단계이거나 더 진행된 상태
         }
         return copy(InstallStatus.QR_VIEWED, at, installedAt, activatedAt, deletedAt);
     }
@@ -99,13 +99,13 @@ public final class SimProfile {
     }
 
     /**
-     * @param at activation time reported by the supplier (UTC); the usage period starts here
+     * @param at 공급사가 알려 준 개통 시각(UTC), 사용 기간의 시작점
      */
     public SimProfile markActivated(Instant at) {
         if (!InstallStatus.ACTIVE.isBeyond(status)) {
             return this;
         }
-        // Activation implies installation even if the install signal was missed.
+        // 설치 신호를 놓쳤더라도 개통은 설치를 포함
         Instant installed = installedAt != null ? installedAt : at;
         return copy(InstallStatus.ACTIVE, qrViewedAt, installed, at, deletedAt);
     }
@@ -118,8 +118,8 @@ public final class SimProfile {
     }
 
     /**
-     * Records that the profile was removed from the device. The status keeps the furthest stage reached;
-     * since a profile can only be deleted after it was downloaded, a missing install time is filled in.
+     * 기기에서 프로필이 지워진 사실을 기록. 상태는 도달한 가장 먼 단계 유지
+     * 프로필은 내려받은 뒤에만 지울 수 있으므로 설치 시각이 비어 있으면 채움
      */
     public SimProfile markDeleted(Instant at) {
         if (deletedAt != null) {
@@ -129,7 +129,7 @@ public final class SimProfile {
         return copy(status, qrViewedAt, installed, activatedAt, at);
     }
 
-    /** Status as seen at {@code now}: an ACTIVE SIM past its expiry is reported as EXPIRED. */
+    /** {@code now} 시점에 보이는 상태: 만료 시각이 지난 ACTIVE SIM은 EXPIRED로 판정 */
     public InstallStatus effectiveStatus(Instant now) {
         if (status == InstallStatus.ACTIVE && usagePeriod().isExpired(now)) {
             return InstallStatus.EXPIRED;
@@ -137,7 +137,7 @@ public final class SimProfile {
         return status;
     }
 
-    /** Refundable only if the SIM was never installed or activated. */
+    /** 한 번도 설치·개통되지 않은 SIM만 환불 가능 */
     public boolean isRefundable() {
         return installedAt == null && activatedAt == null;
     }
@@ -146,12 +146,12 @@ public final class SimProfile {
         return deletedAt != null;
     }
 
-    /** Usage period once activated; {@code null} before activation. */
+    /** 개통 후의 사용 기간, 개통 전에는 {@code null} */
     public UsagePeriod usagePeriod() {
         return activatedAt == null ? null : UsagePeriod.of(activatedAt, usageDays);
     }
 
-    /** Time left in the usage period; {@code null} before activation. */
+    /** 사용 기간의 남은 시간, 개통 전에는 {@code null} */
     public Duration remaining(Instant now) {
         UsagePeriod period = usagePeriod();
         return period == null ? null : period.remaining(now);

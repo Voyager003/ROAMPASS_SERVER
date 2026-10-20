@@ -5,8 +5,8 @@ import java.util.regex.Pattern;
 import com.roampass_server.common.domain.InvalidValueException;
 
 /**
- * SIM card serial number. 19–20 digits whose last digit is a Luhn check digit,
- * so typos when a user types the number printed on a USIM card are caught before calling the supplier.
+ * SIM 카드 일련번호. 19~20자리 숫자, 마지막 자리는 Luhn 체크 디지트
+ * 사용자가 유심 카드에 인쇄된 번호를 잘못 입력해도 공급사 호출 전에 차단
  */
 public record Iccid(String value) {
 
@@ -26,7 +26,7 @@ public record Iccid(String value) {
         return new Iccid(value);
     }
 
-    // Luhn: from the rightmost digit, double every second digit (subtract 9 if > 9); the sum must end in 0.
+    // Luhn: 가장 오른쪽 자리부터 한 자리 건너 하나씩 두 배(9보다 크면 9를 뺌), 합계의 끝자리가 0이면 유효
     private static boolean passesLuhn(String digits) {
         int sum = 0;
         boolean doubleIt = false;

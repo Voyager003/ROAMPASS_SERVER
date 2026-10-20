@@ -19,7 +19,7 @@ class RandomOrderNoGeneratorTest {
     @Test
     @DisplayName("날짜 부분은 UTC가 아니라 KST 기준이다")
     void date_part_uses_kst() {
-        // given — 2026-10-20 15:30 UTC is already 2026-10-21 00:30 in KST
+        // given — 2026-10-20 15:30 UTC는 KST로 이미 2026-10-21 00:30
         Instant now = Instant.parse("2026-10-20T15:30:00Z");
 
         // when

@@ -1,4 +1,4 @@
-# Production: environment variables only, no defaults.
+# 운영 환경: 환경변수만 사용, 기본값 없음
 spring:
   datasource:
     url: ${DB_URL}

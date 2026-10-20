@@ -14,9 +14,9 @@ import com.roampass_server.common.domain.SimType;
 import com.roampass_server.common.domain.UserId;
 
 /**
- * An order (aggregate root): one SIM bought by one user, from payment until the SIM is handed out or refunded.
- * Immutable — every state change returns a new instance, and every change goes through {@link OrderStatus}'s
- * transition table. Identity is the order number, which exists before the order is ever stored.
+ * 주문(집합 루트): 사용자 한 명이 산 SIM 하나. 결제부터 SIM을 내주거나 환불할 때까지 담당
+ * 불변 — 모든 상태 변경은 새 인스턴스를 반환하고 반드시 {@link OrderStatus}의 전이표를 거침
+ * 식별은 주문번호, 주문번호는 저장 전부터 존재
  */
 public final class Order {
 
@@ -51,10 +51,10 @@ public final class Order {
     }
 
     /**
-     * Creates a new PENDING order.
+     * 새 PENDING 주문 생성
      *
-     * @param now           current instant (from the application's Clock)
-     * @param paymentWindow how long the order waits for payment before it expires
+     * @param now           현재 시각(애플리케이션의 Clock에서 획득)
+     * @param paymentWindow 주문 만료 전까지 결제를 기다리는 시간
      */
     public static Order create(OrderNo orderNo, UserId userId, PlanSnapshot plan, LocalDate travelStartDate,
                                Instant now, Duration paymentWindow) {
@@ -69,7 +69,7 @@ public final class Order {
                 OrderStatus.PENDING, now, now.plus(paymentWindow), null);
     }
 
-    // "Today" is the operating day in Korea, not the UTC date.
+    // "오늘"은 UTC 날짜가 아닌 한국의 운영일
     private static void validateTravelStartDate(LocalDate travelStartDate, Instant now) {
         LocalDate todayKst = KoreaTime.toDate(now);
         if (travelStartDate.isBefore(todayKst) || travelStartDate.isAfter(todayKst.plusYears(MAX_DAYS_AHEAD_YEARS))) {
@@ -79,8 +79,8 @@ public final class Order {
     }
 
     /**
-     * Status as seen at {@code now}: a PENDING order past its deadline is reported as EXPIRED
-     * even if the expiration scheduler has not processed it yet.
+     * {@code now} 시점에 보이는 상태: 만료 시각이 지난 PENDING 주문은
+     * 만료 스케줄러가 아직 처리하지 않았더라도 EXPIRED로 판정
      */
     public OrderStatus effectiveStatus(Instant now) {
         if (status == OrderStatus.PENDING && !now.isBefore(expiresAt)) {
@@ -101,8 +101,8 @@ public final class Order {
     }
 
     /**
-     * Applies an approved payment. Within the payment window the order moves on (eSIM → PAID, USIM → PICKUP_READY).
-     * An approval that arrives after the deadline never revives the order: it goes to REFUNDING so the money is returned.
+     * 승인된 결제 반영. 결제 대기 시간 안이면 다음 단계로 진행(이심 → PAID, 유심 → PICKUP_READY)
+     * 만료 시각 이후에 도착한 승인은 주문을 되살리지 않고 돈을 돌려주도록 REFUNDING으로 전이
      */
     public Order confirmPayment(Instant now) {
         if (effectiveStatus(now) == OrderStatus.EXPIRED) {
@@ -126,10 +126,10 @@ public final class Order {
     }
 
     /**
-     * Starts a refund.
+     * 환불 시작
      *
-     * @param simRefundable whether the issued SIM is still refundable (not installed/activated).
-     *                      Only consulted when the order is ISSUED; the SIM profile owns that judgement.
+     * @param simRefundable 발급된 SIM의 환불 가능 여부(설치·개통 전인지)
+     *                      주문이 ISSUED일 때만 참고, 판정은 SIM 프로필 책임
      */
     public Order startRefund(boolean simRefundable) {
         if (status == OrderStatus.ISSUED && !simRefundable) {
@@ -142,14 +142,14 @@ public final class Order {
         return transitionTo(OrderStatus.REFUNDED);
     }
 
-    /** Automatic handling gave up (e.g. refund retries exhausted); an operator must act. */
+    /** 자동 처리 포기(예: 환불 재시도 소진), 운영자 조치 필요 */
     public Order escalate() {
         return transitionTo(OrderStatus.NEEDS_ATTENTION);
     }
 
     /**
-     * Operator re-issuance. Allowed only for an eSIM order that has never been issued,
-     * so a single order can never end up with two profiles.
+     * 운영자 재발급. 한 번도 발급된 적 없는 이심 주문만 허용해서
+     * 한 주문에 프로필이 두 개 붙는 상황 방지
      */
     public Order reissue() {
         if (simType != SimType.ESIM || issuedAt != null) {

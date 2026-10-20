@@ -1,5 +1,5 @@
-# Test profile. The datasource is provided by Testcontainers through @ServiceConnection
-# (see support/TestcontainersConfiguration), so no connection settings are needed here.
+# 테스트 프로필. 데이터소스는 Testcontainers가 @ServiceConnection으로 제공
+# (support/TestcontainersConfiguration 참고), 여기에는 접속 설정 불필요
 spring:
   jpa:
     show-sql: false

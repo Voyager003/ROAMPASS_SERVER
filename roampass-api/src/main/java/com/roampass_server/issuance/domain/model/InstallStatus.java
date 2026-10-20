@@ -1,20 +1,19 @@
 package com.roampass_server.issuance.domain.model;
 
 /**
- * How far an issued SIM has progressed on the user's device. Declared in progression order and only ever
- * moves forward: a signal for an earlier stage arriving late is ignored, and stages may be skipped when a
- * signal is missing (e.g. ISSUED → ACTIVE).
+ * 발급된 SIM이 사용자 기기에서 진행한 단계. 진행 순서대로 선언, 앞으로만 진행:
+ * 늦게 도착한 이전 단계 신호는 무시, 신호가 빠지면 단계 건너뛰기 허용(예: ISSUED → ACTIVE)
  */
 public enum InstallStatus {
-    /** Issued; QR / activation code can be shown. */
+    /** 발급 완료, QR·활성화 코드 표시 가능 */
     ISSUED,
-    /** The user opened the QR on our screen — the only signal we record ourselves. */
+    /** 사용자가 우리 화면에서 QR 열람 — 우리가 직접 기록하는 유일한 신호 */
     QR_VIEWED,
-    /** Profile downloaded to the device — known only from the supplier. */
+    /** 기기에 프로필 다운로드 — 공급사를 통해서만 확인 가능 */
     INSTALLED,
-    /** Activated on the local network; the usage period starts. */
+    /** 현지 개통, 사용 기간 시작 */
     ACTIVE,
-    /** Usage period over. */
+    /** 사용 기간 종료 */
     EXPIRED;
 
     public boolean isBeyond(InstallStatus other) {

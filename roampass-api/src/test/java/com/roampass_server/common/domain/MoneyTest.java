@@ -77,7 +77,7 @@ class MoneyTest {
 
             // then
             assertThat(result).isEqualTo(Money.krw(12_500));
-            assertThat(original).isEqualTo(Money.krw(10_000)); // immutable
+            assertThat(original).isEqualTo(Money.krw(10_000)); // 불변
         }
 
         @Test

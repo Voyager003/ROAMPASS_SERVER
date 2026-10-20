@@ -5,11 +5,11 @@ import java.util.regex.Pattern;
 import com.roampass_server.common.domain.InvalidValueException;
 
 /**
- * What a plan offers: where it works, for how many days, and how much data.
+ * 요금제가 제공하는 것: 사용 국가, 사용 일수, 데이터 용량
  *
- * @param countryCode ISO 3166-1 alpha-2, upper case (e.g. "JP")
- * @param days        number of usage days, at least 1
- * @param dataMb      total data allowance in megabytes, at least 1
+ * @param countryCode ISO 3166-1 alpha-2 대문자(예: "JP")
+ * @param days        사용 일수, 1 이상
+ * @param dataMb      전체 데이터 용량(MB), 1 이상
  */
 public record PlanSpec(String countryCode, int days, int dataMb) {
 

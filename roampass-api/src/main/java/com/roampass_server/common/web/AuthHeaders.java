@@ -1,8 +1,8 @@
 package com.roampass_server.common.web;
 
 /**
- * Header names used to identify callers. The assignment explicitly allows header-level
- * identification instead of a real authentication system.
+ * 호출자 식별에 쓰는 헤더 이름. 과제가 실제 인증 시스템 대신 헤더 수준의 식별을
+ * 명시적으로 허용
  */
 public final class AuthHeaders {
 

@@ -22,7 +22,7 @@ class RefundAttemptTest {
     private static final OrderNo ORDER_NO = OrderNo.of("ORD-20261020-7K3Q9XPA");
     private static final IdempotencyKey PAYMENT_KEY = IdempotencyKey.of(ORDER_NO, 1);
     private static final Money AMOUNT = Money.krw(12_000);
-    private static final RetryPolicy POLICY = RetryPolicy.defaults(); // 3 attempts, 1m → 2m → ...
+    private static final RetryPolicy POLICY = RetryPolicy.defaults(); // 3회, 1분 → 2분 → ...
 
     private static RefundAttempt started() {
         return RefundAttempt.start(PAYMENT_KEY, ORDER_NO, AMOUNT, NOW);

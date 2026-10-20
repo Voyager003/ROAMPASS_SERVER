@@ -23,10 +23,10 @@ class PaymentStatusTest {
 
     @ParameterizedTest(name = "{0} → {1} 거부")
     @CsvSource({
-            "FAILED, APPROVED",       // a final result is never flipped
+            "FAILED, APPROVED",       // 확정된 결과는 뒤집히지 않음
             "APPROVED, FAILED",
             "CANCELLED, APPROVED",
-            "REQUESTED, CANCELLED",   // nothing to cancel yet
+            "REQUESTED, CANCELLED",   // 아직 취소할 것이 없음
             "APPROVED, REQUESTED"
     })
     @DisplayName("금지된 전이")

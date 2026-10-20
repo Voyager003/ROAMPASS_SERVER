@@ -5,17 +5,17 @@ import java.time.Duration;
 import com.roampass_server.common.domain.InvalidValueException;
 
 /**
- * How many times a failing operation is retried and how long to wait in between (exponential backoff).
- * Retries are always bounded: once {@link #maxAttempts()} attempts have failed, the work is handed to an operator.
+ * 실패한 작업의 재시도 횟수와 대기 시간(지수 백오프)
+ * 재시도는 항상 제한: {@link #maxAttempts()}번 실패하면 운영자에게 인계
  *
- * @param maxAttempts total attempts allowed, including the first one
- * @param baseDelay   wait after the first failure; doubled after each further failure
- * @param maxDelay    upper bound for a single wait
+ * @param maxAttempts 첫 시도를 포함한 전체 허용 시도 횟수
+ * @param baseDelay   첫 실패 후의 대기 시간, 이후 실패할 때마다 두 배
+ * @param maxDelay    한 번 대기하는 시간의 상한
  */
 public record RetryPolicy(int maxAttempts, Duration baseDelay, Duration maxDelay) {
 
     private static final String CODE = "INVALID_RETRY_POLICY";
-    // 2^30 times any sensible base delay is far above any max delay, so capping the exponent avoids overflow.
+    // 기본 대기 시간이 얼마든 2^30배면 상한을 훨씬 넘으므로 지수에 상한을 두어 오버플로 방지
     private static final int MAX_SHIFT = 30;
 
     public RetryPolicy {
@@ -34,12 +34,12 @@ public record RetryPolicy(int maxAttempts, Duration baseDelay, Duration maxDelay
         return new RetryPolicy(maxAttempts, baseDelay, maxDelay);
     }
 
-    /** 3 attempts, waiting 1 minute, then 2, then 4 ... at most 30 minutes. */
+    /** 3회, 1분 대기 후 2분, 4분 ... 최대 30분 */
     public static RetryPolicy defaults() {
         return new RetryPolicy(3, Duration.ofMinutes(1), Duration.ofMinutes(30));
     }
 
-    /** Wait before the next attempt after {@code failedAttempts} failures (1 = first failure). */
+    /** {@code failedAttempts}번 실패한 뒤 다음 시도까지의 대기 시간(1 = 첫 실패) */
     public Duration delayAfter(int failedAttempts) {
         int shift = Math.min(Math.max(failedAttempts - 1, 0), MAX_SHIFT);
         Duration delay = baseDelay.multipliedBy(1L << shift);

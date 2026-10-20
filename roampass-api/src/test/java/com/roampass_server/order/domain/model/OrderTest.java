@@ -140,7 +140,7 @@ class OrderTest {
         @Test
         @DisplayName("UTC로는 같은 날이어도 KST로 이미 다음 날이면 거부된다 (자정 경계)")
         void uses_kst_today_not_utc_today() {
-            // given — 2026-10-20 15:30 UTC is 2026-10-21 00:30 KST
+            // given — 2026-10-20 15:30 UTC는 KST로 2026-10-21 00:30
             Instant lateNightUtc = Instant.parse("2026-10-20T15:30:00Z");
 
             // when & then
@@ -189,7 +189,7 @@ class OrderTest {
 
             // then
             assertThat(expired.status()).isEqualTo(OrderStatus.EXPIRED);
-            assertThat(order.status()).isEqualTo(OrderStatus.PENDING); // immutable
+            assertThat(order.status()).isEqualTo(OrderStatus.PENDING); // 불변
         }
 
         @Test

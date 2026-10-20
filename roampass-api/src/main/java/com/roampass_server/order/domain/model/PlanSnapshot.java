@@ -5,8 +5,8 @@ import com.roampass_server.common.domain.Money;
 import com.roampass_server.common.domain.SimType;
 
 /**
- * The parts of a plan an order needs, copied at order time. The order domain does not import the
- * plan domain (domains never import each other), and a later price change must not alter existing orders.
+ * 주문에 필요한 요금제 정보를 주문 시점에 복사한 값. 주문 도메인은 요금제 도메인을 import하지 않고
+ * (도메인끼리는 서로 import 금지), 이후 요금제 가격이 바뀌어도 기존 주문은 그대로 유지
  */
 public record PlanSnapshot(Long planId, SimType simType, Money price) {
 

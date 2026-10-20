@@ -6,9 +6,9 @@ import com.roampass_server.common.domain.InvalidValueException;
 import com.roampass_server.common.domain.OrderNo;
 
 /**
- * Key sent with each PG approval request so that re-sending the same attempt never approves twice.
- * One payment attempt = one key: {@code {orderNo}-{attempt}} (e.g. ORD-20261020-7K3Q9XPA-1),
- * readable enough to tell which order and which attempt it belongs to.
+ * PG 승인 요청마다 함께 보내는 키, 같은 시도를 다시 보내도 중복 승인 방지
+ * 결제 시도 1건 = 키 1개: {@code {orderNo}-{attempt}} (예: ORD-20261020-7K3Q9XPA-1)
+ * 어느 주문의 몇 번째 시도인지 바로 식별 가능
  */
 public record IdempotencyKey(String value) {
 

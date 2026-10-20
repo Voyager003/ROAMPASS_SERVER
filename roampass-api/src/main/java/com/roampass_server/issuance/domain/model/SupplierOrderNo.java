@@ -5,7 +5,7 @@ import java.util.regex.Pattern;
 import com.roampass_server.common.domain.InvalidValueException;
 
 /**
- * Number the supplier returns when it accepts an issuance request; its callback refers to this number.
+ * 공급사가 발급 요청 접수 시 돌려주는 번호. 공급사 콜백이 주문을 가리킬 때 사용
  */
 public record SupplierOrderNo(String value) {
 

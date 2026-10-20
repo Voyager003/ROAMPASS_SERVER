@@ -4,9 +4,9 @@ import com.roampass_server.common.domain.InvalidValueException;
 import com.roampass_server.common.domain.OrderNo;
 
 /**
- * Which aggregate a history entry is about: its kind plus its key
- * (order number, payment idempotency key, refund id, ...). The key is a plain string because the history
- * domain does not import the other domains' types.
+ * 이력 기록이 가리키는 집합 루트: 종류와 그 대상의 키
+ * (주문번호, 결제 멱등 키, 환불 id 등). history 도메인은 다른 도메인의 타입을 import하지 않으므로
+ * 키는 일반 문자열
  */
 public record HistoryTarget(TargetType type, String key) {
 

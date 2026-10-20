@@ -45,7 +45,7 @@ class SimProfileTest {
             assertThat(profile.activationCode()).isEqualTo(CODE);
             assertThat(profile.supplierOrderNo()).isEqualTo(SUPPLIER_ORDER_NO);
             assertThat(profile.issuedAt()).isEqualTo(NOW);
-            assertThat(profile.usagePeriod()).isNull(); // not activated yet
+            assertThat(profile.usagePeriod()).isNull(); // 아직 개통 전
         }
 
         @Test
@@ -163,7 +163,7 @@ class SimProfileTest {
     @DisplayName("개통되면")
     class WhenActivated {
 
-        // Appendix A example time
+        // 부록 A 예시 시각
         private final Instant activatedAt = Instant.parse("2026-05-01T15:20:00Z");
 
         @Test

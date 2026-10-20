@@ -8,9 +8,9 @@ import com.roampass_server.common.domain.KoreaTime;
 import com.roampass_server.common.domain.OrderNo;
 
 /**
- * {@code ORD-{KST yyyyMMdd}-{8 random chars}}. The alphabet leaves out 0/O and 1/I so numbers read
- * aloud over support calls are not misheard. 32^8 ≈ 1.1 × 10^12 combinations per day; a collision is
- * still caught by the unique constraint on order_no at save time.
+ * {@code ORD-{KST yyyyMMdd}-{랜덤 8자}}. 문의 전화에서 소리 내어 읽을 때 헷갈리지 않도록
+ * 0/O와 1/I는 문자 집합에서 제외. 하루에 32^8 ≈ 1.1 × 10^12가지 조합,
+ * 충돌 발생 시 저장 시점에 order_no 유니크 제약이 검출
  */
 public class RandomOrderNoGenerator implements OrderNoGenerator {
 

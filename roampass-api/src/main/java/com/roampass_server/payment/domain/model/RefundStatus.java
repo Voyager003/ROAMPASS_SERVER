@@ -1,13 +1,13 @@
 package com.roampass_server.payment.domain.model;
 
 /**
- * State of one refund request.
+ * 환불 요청 1건의 상태
  */
 public enum RefundStatus {
-    /** Waiting for the next PG cancel attempt (at nextRetryAt). */
+    /** 다음 PG 취소 시도(nextRetryAt) 대기 중 */
     PENDING,
-    /** PG cancel confirmed. Terminal. */
+    /** PG 취소 확인, 종료 상태 */
     SUCCEEDED,
-    /** Retries exhausted; an operator must look at the order. Terminal — a manual refund starts a new request. */
+    /** 재시도 모두 소진, 운영자 확인 필요. 종료 상태 — 수동 환불은 새 요청으로 시작 */
     GAVE_UP
 }

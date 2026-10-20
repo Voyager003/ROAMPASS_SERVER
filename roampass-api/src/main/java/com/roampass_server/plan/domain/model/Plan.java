@@ -7,9 +7,9 @@ import com.roampass_server.common.domain.Money;
 import com.roampass_server.common.domain.SimType;
 
 /**
- * A plan on sale (aggregate root). Plans are catalog data seeded by migration, so they are only
- * ever reconstituted with an existing id; orders copy the price and SIM type at order time.
- * Equality is by id, as for every aggregate root.
+ * 판매 중인 요금제(집합 루트). 마이그레이션으로 넣는 카탈로그 데이터라서 항상 기존 id로만
+ * 복원. 주문은 주문 시점에 가격과 SIM 종류를 복사
+ * 다른 집합 루트처럼 동등성은 id 기준
  */
 public final class Plan {
 

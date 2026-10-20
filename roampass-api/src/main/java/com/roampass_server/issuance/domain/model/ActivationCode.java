@@ -5,7 +5,7 @@ import java.util.regex.Pattern;
 import com.roampass_server.common.domain.InvalidValueException;
 
 /**
- * eSIM activation code (the content of the QR code): {@code LPA:1${SM-DP+ address}${matching id}}.
+ * 이심 활성화 코드(QR 코드의 내용): {@code LPA:1${SM-DP+ 주소}${매칭 ID}}
  */
 public record ActivationCode(String value) {
 

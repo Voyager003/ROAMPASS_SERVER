@@ -3,8 +3,8 @@ package com.roampass_server.payment.domain.model;
 import com.roampass_server.common.domain.DomainException;
 
 /**
- * An approval notice carried an amount different from the payment amount.
- * The payment must not be completed; the caller records it as an anomaly.
+ * 승인 통지의 금액이 결제 금액과 불일치
+ * 결제 완료 처리 금지, 호출한 쪽이 이상 건으로 기록
  */
 public class PaymentAmountMismatchException extends DomainException {
 

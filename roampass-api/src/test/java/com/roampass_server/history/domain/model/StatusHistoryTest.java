@@ -22,7 +22,7 @@ class StatusHistoryTest {
     private static final OrderNo ORDER_NO = OrderNo.of("ORD-20261020-7K3Q9XPA");
     private static final HistoryTarget ORDER = HistoryTarget.order(ORDER_NO);
 
-    // Any enum works as a status: the history stores status names across order, payment and SIM lifecycles.
+    // 어떤 enum이든 상태로 사용 가능: 이력은 주문·결제·SIM 상태 흐름의 상태 이름을 함께 저장
     private enum SampleStatus { PENDING, PAID, NEEDS_ATTENTION, REFUNDING }
 
     @Nested

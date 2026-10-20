@@ -16,7 +16,7 @@ import com.roampass_server.common.domain.InvalidValueException;
 @DisplayName("UsagePeriod (만료일: 개통 시각 + 24시간 × N)")
 class UsagePeriodTest {
 
-    // Appendix A example: activatedAt = 2026-05-01T15:20:00Z, which is 2026-05-02 00:20 KST
+    // 부록 A 예시: activatedAt = 2026-05-01T15:20:00Z, 즉 KST 2026-05-02 00:20
     private static final Instant ACTIVATED_AT = Instant.parse("2026-05-01T15:20:00Z");
 
     @Nested

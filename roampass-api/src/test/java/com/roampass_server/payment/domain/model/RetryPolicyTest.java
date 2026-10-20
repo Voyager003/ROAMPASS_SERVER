@@ -47,7 +47,7 @@ class RetryPolicyTest {
         void capped_at_max_delay() {
             // when & then
             assertThat(policy.delayAfter(6)).isEqualTo(Duration.ofMinutes(30)); // 32 → 30
-            assertThat(policy.delayAfter(100)).isEqualTo(Duration.ofMinutes(30)); // no overflow
+            assertThat(policy.delayAfter(100)).isEqualTo(Duration.ofMinutes(30)); // 오버플로 없음
         }
     }
 

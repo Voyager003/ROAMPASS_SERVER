@@ -1,7 +1,7 @@
 package com.roampass_server.common.domain;
 
 /**
- * A domain object was asked to move to a state that its transition rules do not allow.
+ * 전이 규칙이 허용하지 않는 상태로의 변경 요청
  */
 public class IllegalStateTransitionException extends DomainException {
 

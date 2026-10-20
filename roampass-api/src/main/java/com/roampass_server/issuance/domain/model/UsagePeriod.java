@@ -8,9 +8,9 @@ import com.roampass_server.common.domain.InvalidValueException;
 import com.roampass_server.common.domain.KoreaTime;
 
 /**
- * Usage window of an activated SIM. An N-day plan lasts exactly N × 24 hours from the supplier's activation time
- * (UTC), so the user always gets the full N days regardless of what time of day they activated.
- * The expiry is shown in KST, which can fall on a different calendar date than in UTC.
+ * 개통된 SIM의 사용 기간. N일 요금제는 공급사가 알려 준 개통 시각(UTC)부터 정확히 N × 24시간이라서
+ * 하루 중 언제 개통하든 사용자는 항상 N일을 온전히 사용
+ * 만료 시각은 KST로 표시, UTC와 달력 날짜가 다를 수 있음
  */
 public record UsagePeriod(Instant activatedAt, int days) {
 
@@ -38,7 +38,7 @@ public record UsagePeriod(Instant activatedAt, int days) {
         return !now.isBefore(expiresAt());
     }
 
-    /** Time left until expiry; never negative. */
+    /** 만료까지 남은 시간, 음수 없음 */
     public Duration remaining(Instant now) {
         Duration left = Duration.between(now, expiresAt());
         return left.isNegative() ? Duration.ZERO : left;

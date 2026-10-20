@@ -9,12 +9,12 @@ import com.roampass_server.common.domain.Money;
 import com.roampass_server.common.domain.OrderNo;
 
 /**
- * One payment attempt for an order (aggregate root). Immutable; identity is the idempotency key.
+ * 주문에 대한 결제 시도 1건(집합 루트). 불변, 식별은 멱등 키
  * <ul>
- *   <li>Approval is idempotent: the same approval (same PG transaction id) arriving again changes nothing,
- *       so an approval response plus one or more webhooks are applied once.</li>
- *   <li>An approval whose amount differs from the payment amount is rejected.</li>
- *   <li>Cancels accumulate and can never exceed the approved amount.</li>
+ *   <li>승인 멱등: 같은 승인(같은 PG 거래 ID)이 다시 와도 변화 없음,
+ *       승인 응답과 하나 이상의 웹훅이 와도 한 번만 반영</li>
+ *   <li>결제 금액과 다른 금액의 승인은 거부</li>
+ *   <li>취소는 누적, 승인 금액 초과 불가</li>
  * </ul>
  */
 public final class Payment {
@@ -45,9 +45,9 @@ public final class Payment {
     }
 
     /**
-     * Starts a new payment attempt.
+     * 새 결제 시도 시작
      *
-     * @param attempt 1 for the first attempt of the order, 2 after a failed first attempt, ...
+     * @param attempt 주문의 첫 시도는 1, 첫 시도 실패 후에는 2, ...
      */
     public static Payment request(OrderNo orderNo, int attempt, Money amount, Instant now) {
         if (orderNo == null || amount == null || now == null) {
@@ -61,8 +61,8 @@ public final class Payment {
     }
 
     /**
-     * Applies an approval notice (from the PG's response or its webhook).
-     * Returns {@code this} unchanged when the same approval was already applied.
+     * 승인 통지(PG 응답 또는 웹훅) 반영
+     * 같은 승인이 이미 반영되어 있으면 {@code this}를 그대로 반환
      */
     public Payment approve(PgTid tid, Money approvedAmount, Instant now) {
         if (tid == null || approvedAmount == null) {
@@ -73,7 +73,7 @@ public final class Payment {
         }
         if (pgTid != null) {
             if (pgTid.equals(tid)) {
-                return this; // duplicate notice of the approval already applied
+                return this; // 이미 반영한 승인의 중복 통지
             }
             throw new IllegalStateTransitionException("Payment", status, PaymentStatus.APPROVED + " (different PG transaction id)");
         }
@@ -83,7 +83,7 @@ public final class Payment {
     }
 
     /**
-     * Applies a failure notice. A repeated failure notice changes nothing; an approved payment is never flipped.
+     * 실패 통지 반영. 같은 실패 통지가 다시 오면 변화 없음, 승인된 결제는 뒤집지 않음
      */
     public Payment fail(String reason, Instant now) {
         if (status == PaymentStatus.FAILED) {
@@ -95,7 +95,7 @@ public final class Payment {
     }
 
     /**
-     * Records a successful PG cancel of {@code cancelAmount}. Call it only after the PG confirmed the cancel.
+     * {@code cancelAmount}만큼의 PG 취소 성공 기록. PG가 취소를 확인한 뒤에만 호출
      */
     public Payment cancel(Money cancelAmount, Instant now) {
         if (cancelAmount == null || cancelAmount.amount() == 0) {
@@ -114,7 +114,7 @@ public final class Payment {
                 requestedAt, approvedAt);
     }
 
-    /** Amount that can still be cancelled; zero unless the payment is (partially) approved. */
+    /** 아직 취소할 수 있는 금액, (부분) 승인 상태가 아니면 0 */
     public Money cancelableAmount() {
         if (status != PaymentStatus.APPROVED && status != PaymentStatus.PARTIALLY_CANCELLED) {
             return Money.zero(amount.currency());

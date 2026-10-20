@@ -3,9 +3,9 @@ package com.roampass_server.common.domain;
 import java.util.regex.Pattern;
 
 /**
- * Shared validation for identifiers that arrive in request headers.
- * These values end up in status history and logs, so only a narrow character set is accepted,
- * and error messages never echo the raw input (prevents log injection).
+ * 요청 헤더로 들어오는 식별자의 공통 검증
+ * 상태 변경 이력과 로그에 그대로 남는 값이라 좁은 문자 집합만 허용,
+ * 에러 메시지에 입력값을 넣지 않음(로그 주입 방지)
  */
 final class IdentifierFormat {
 

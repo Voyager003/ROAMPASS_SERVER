@@ -5,7 +5,7 @@ import java.time.Instant;
 import com.roampass_server.common.domain.OrderNo;
 
 /**
- * Port for issuing new order numbers. Tests can supply fixed numbers.
+ * 새 주문번호 발급 포트. 테스트에서는 고정 번호 주입 가능
  */
 public interface OrderNoGenerator {
 

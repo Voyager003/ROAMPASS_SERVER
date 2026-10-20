@@ -32,12 +32,12 @@ class OrderStatusTest {
 
     @ParameterizedTest(name = "{0} → {1} 거부")
     @CsvSource({
-            "EXPIRED, PAID",            // an expired order is never revived
-            "PAID, PENDING",            // no going back
-            "ISSUED, ISSUE_REQUESTED",  // never issue twice
-            "ISSUE_REQUESTED, REFUNDING", // must fail (or succeed) first
-            "PENDING, REFUNDING",       // nothing was paid yet
-            "ISSUED, REFUNDED"          // refunds always go through REFUNDING
+            "EXPIRED, PAID",            // 만료된 주문은 되살아나지 않음
+            "PAID, PENDING",            // 되돌아가지 않음
+            "ISSUED, ISSUE_REQUESTED",  // 두 번 발급하지 않음
+            "ISSUE_REQUESTED, REFUNDING", // 먼저 실패(또는 성공)가 필요
+            "PENDING, REFUNDING",       // 아직 결제된 것이 없음
+            "ISSUED, REFUNDED"          // 환불은 항상 REFUNDING을 거침
     })
     @DisplayName("대표적인 금지 전이")
     void forbidden_transitions(OrderStatus from, OrderStatus to) {

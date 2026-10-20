@@ -1,17 +1,17 @@
 package com.roampass_server.common.domain;
 
 /**
- * Who (or what signal) caused a change.
+ * 변경을 일으킨 주체(또는 신호)
  */
 public enum ActorType {
-    /** The end user (X-User-Id). */
+    /** 최종 사용자 (X-User-Id) */
     USER,
-    /** An operator (X-Admin-Id). */
+    /** 운영자 (X-Admin-Id) */
     ADMIN,
-    /** Our own scheduler or automatic handling. */
+    /** 우리 서버의 스케줄러·자동 처리 */
     SYSTEM,
-    /** The payment gateway (approval response, webhook). */
+    /** 결제 대행사 (승인 응답, 웹훅) */
     PG,
-    /** The SIM supplier (callback, status lookup). */
+    /** SIM 공급사 (콜백, 상태 조회) */
     SUPPLIER
 }

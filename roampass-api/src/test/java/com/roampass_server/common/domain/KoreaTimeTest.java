@@ -28,7 +28,7 @@ class KoreaTimeTest {
         @Test
         @DisplayName("UTC 15:00 이후는 KST로 다음 날이 된다 (부록 A 예시 시각)")
         void utc_after_15_is_next_day_in_kst() {
-            // given — the activatedAt example from the assignment's Appendix A
+            // given — 과제 부록 A의 activatedAt 예시
             Instant utc = Instant.parse("2026-05-01T15:20:00Z");
 
             // when

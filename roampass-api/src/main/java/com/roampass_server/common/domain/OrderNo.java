@@ -3,10 +3,10 @@ package com.roampass_server.common.domain;
 import java.util.regex.Pattern;
 
 /**
- * Externally visible order number shared with the PG, the supplier and the user.
- * Lives in the shared kernel because it is the correlation key across systems (order, payment, issuance).
- * Format: {@code ORD-{KST yyyyMMdd}-{8 upper-case letters/digits}} — the date helps support,
- * the random part makes other people's order numbers hard to guess.
+ * PG·공급사·사용자와 함께 쓰는, 외부에 보이는 주문번호
+ * 주문·결제·발급을 잇는 시스템 간 연결 키라서 공유 커널에 위치
+ * 형식: {@code ORD-{KST yyyyMMdd}-{영문 대문자·숫자 8자}} — 날짜는 문의 대응용,
+ * 랜덤 부분은 다른 사람의 주문번호 추측 방지
  */
 public record OrderNo(String value) {
 

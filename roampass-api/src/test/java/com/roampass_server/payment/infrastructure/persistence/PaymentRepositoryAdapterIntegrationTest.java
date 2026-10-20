@@ -131,4 +131,30 @@ class PaymentRepositoryAdapterIntegrationTest {
                     .isInstanceOf(DataIntegrityViolationException.class);
         }
     }
+
+    @Nested
+    @DisplayName("오래된 REQUESTED 조회는")
+    class FindStaleRequested {
+
+        @Test
+        @DisplayName("기준 시각 이전에 요청된 REQUESTED만, 오래된 순으로, 최대 건수만큼")
+        void filters_and_limits() {
+            // given
+            OrderNo other = orderRepository.save(pendingOrder("PAYM0002", NOW)).orderNo();
+            OrderNo third = orderRepository.save(pendingOrder("PAYM0003", NOW)).orderNo();
+            paymentRepository.save(Payment.request(orderNo, 1, PRICE, NOW.plusSeconds(10)));
+            paymentRepository.save(Payment.request(other, 1, PRICE, NOW));
+            paymentRepository.save(Payment.request(third, 1, PRICE, NOW.plusSeconds(5)).fail("x", NOW));
+            paymentRepository.save(Payment.request(third, 2, PRICE, NOW.plusSeconds(120)));
+
+            // when
+            var stale = paymentRepository.findStaleRequested(NOW.plusSeconds(60), 10);
+            var limited = paymentRepository.findStaleRequested(NOW.plusSeconds(60), 1);
+
+            // then
+            assertThat(stale).extracting(p -> p.idempotencyKey().value())
+                    .containsExactly(other.value() + "-1", orderNo.value() + "-1");
+            assertThat(limited).hasSize(1);
+        }
+    }
 }

@@ -1,5 +1,6 @@
 package com.roampass_server.payment.domain.repository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,6 +21,9 @@ public interface PaymentRepository {
 
     /** 주문의 결제 시도 전체, 요청 시각 오름차순 */
     List<Payment> findByOrderNo(OrderNo orderNo);
+
+    /** {@code requestedBefore} 이전에 요청되어 아직 REQUESTED인 결제, 요청 시각 오름차순 최대 {@code limit}건 */
+    List<Payment> findStaleRequested(Instant requestedBefore, int limit);
 
     /**
      * 저장된 상태가 아직 {@code expected}일 때만 결제의 변경을 저장(조건부 UPDATE)

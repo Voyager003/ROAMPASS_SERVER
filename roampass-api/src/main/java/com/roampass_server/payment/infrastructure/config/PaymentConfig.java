@@ -14,6 +14,7 @@ import com.roampass_server.callback.domain.service.HmacSignature;
 import com.roampass_server.history.application.StatusHistoryRecorder;
 import com.roampass_server.order.domain.repository.OrderRepository;
 import com.roampass_server.payment.application.PaymentConfirmationService;
+import com.roampass_server.payment.application.PaymentReconciliationService;
 import com.roampass_server.payment.application.PaymentRequestService;
 import com.roampass_server.payment.application.PaymentService;
 import com.roampass_server.payment.application.PaymentWebhookProcessor;
@@ -59,6 +60,15 @@ public class PaymentConfig {
                                   PaymentRepository paymentRepository, OrderRepository orderRepository, Clock clock) {
         return new PaymentService(requestService, confirmationService, pgClient, paymentRepository, orderRepository,
                 clock);
+    }
+
+    @Bean
+    PaymentReconciliationService paymentReconciliationService(PaymentRepository paymentRepository, PgClient pgClient,
+                                                              PaymentConfirmationService confirmationService,
+                                                              Clock clock, PaymentProperties properties) {
+        PaymentProperties.Reconciliation reconciliation = properties.reconciliation();
+        return new PaymentReconciliationService(paymentRepository, pgClient, confirmationService, clock,
+                reconciliation.staleAfter(), reconciliation.batchSize());
     }
 
     @Bean

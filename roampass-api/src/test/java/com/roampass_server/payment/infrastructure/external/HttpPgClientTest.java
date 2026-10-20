@@ -26,6 +26,7 @@ import com.roampass_server.payment.domain.model.PgTid;
 import com.roampass_server.payment.domain.service.PgApproveRequest;
 import com.roampass_server.payment.domain.service.PgApproveResult;
 import com.roampass_server.payment.domain.service.PgApproveResult.Outcome;
+import com.roampass_server.payment.domain.service.PgInquiryResult;
 
 @DisplayName("PG HTTP 어댑터")
 class HttpPgClientTest {
@@ -109,5 +110,47 @@ class HttpPgClientTest {
 
         // when // then
         assertThat(client.approve(REQUEST).outcome()).isEqualTo(Outcome.UNKNOWN);
+    }
+
+    @Test
+    @DisplayName("상태 조회: 승인(부분·전액 취소 포함)은 APPROVED와 거래 ID·금액")
+    void inquiry_approved() {
+        // given
+        server.expect(requestTo("http://pg.test/mock/pg/payments/ORD-20261020-AAAA1111-1"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("""
+                        {"idempotencyKey":"ORD-20261020-AAAA1111-1","pgTid":"pg_abc","amount":9900,"currency":"KRW",
+                         "status":"PARTIALLY_CANCELLED","cancelledAmount":1000}
+                        """, MediaType.APPLICATION_JSON));
+
+        // when
+        PgInquiryResult result = client.inquire(REQUEST.idempotencyKey());
+
+        // then
+        assertThat(result.status()).isEqualTo(PgInquiryResult.Status.APPROVED);
+        assertThat(result.pgTid()).isEqualTo(PgTid.of("pg_abc"));
+        assertThat(result.amount()).isEqualTo(Money.krw(9_900));
+    }
+
+    @Test
+    @DisplayName("상태 조회: 404면 NOT_FOUND(PG가 요청을 받은 적 없음)")
+    void inquiry_not_found() {
+        // given
+        server.expect(requestTo("http://pg.test/mock/pg/payments/ORD-20261020-AAAA1111-1"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        // when // then
+        assertThat(client.inquire(REQUEST.idempotencyKey()).status()).isEqualTo(PgInquiryResult.Status.NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("상태 조회: 5xx면 UNKNOWN")
+    void inquiry_server_error() {
+        // given
+        server.expect(requestTo("http://pg.test/mock/pg/payments/ORD-20261020-AAAA1111-1"))
+                .andRespond(withServerError());
+
+        // when // then
+        assertThat(client.inquire(REQUEST.idempotencyKey()).status()).isEqualTo(PgInquiryResult.Status.UNKNOWN);
     }
 }

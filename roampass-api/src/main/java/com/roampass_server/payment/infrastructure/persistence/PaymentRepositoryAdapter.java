@@ -1,9 +1,11 @@
 package com.roampass_server.payment.infrastructure.persistence;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +45,14 @@ class PaymentRepositoryAdapter implements PaymentRepository {
     @Override
     public List<Payment> findByOrderNo(OrderNo orderNo) {
         return jpaRepository.findByOrderNoOrderByRequestedAtAsc(orderNo.value()).stream()
+                .map(PaymentJpaEntity::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<Payment> findStaleRequested(Instant requestedBefore, int limit) {
+        return jpaRepository.findByStatusAndRequestedAtLessThanEqualOrderByRequestedAtAsc(
+                        PaymentStatus.REQUESTED, requestedBefore, PageRequest.of(0, limit)).stream()
                 .map(PaymentJpaEntity::toDomain)
                 .toList();
     }

@@ -1,5 +1,6 @@
 package com.roampass_server.payment.infrastructure.external;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -8,10 +9,12 @@ import org.springframework.web.client.RestClientException;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.roampass_server.common.domain.Currency;
 import com.roampass_server.common.domain.Money;
+import com.roampass_server.payment.domain.model.IdempotencyKey;
 import com.roampass_server.payment.domain.model.PgTid;
 import com.roampass_server.payment.domain.service.PgApproveRequest;
 import com.roampass_server.payment.domain.service.PgApproveResult;
 import com.roampass_server.payment.domain.service.PgClient;
+import com.roampass_server.payment.domain.service.PgInquiryResult;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -46,6 +49,38 @@ public class HttpPgClient implements PgClient {
             log.warn("PG approve result unknown {}: {}", request.idempotencyKey().value(), e.getMessage());
             return PgApproveResult.unknown(e.getClass().getSimpleName());
         }
+    }
+
+    @Override
+    public PgInquiryResult inquire(IdempotencyKey key) {
+        try {
+            ApproveResponse response = restClient.get().uri("/mock/pg/payments/{key}", key.value())
+                    .retrieve()
+                    .body(ApproveResponse.class);
+            return toInquiryResult(response);
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode().value() == HttpStatus.NOT_FOUND.value()) {
+                return PgInquiryResult.notFound();
+            }
+            log.warn("PG rejected inquiry {}: {}", key.value(), e.getStatusCode());
+            return PgInquiryResult.unknown();
+        } catch (RestClientException e) {
+            log.warn("PG inquiry failed {}: {}", key.value(), e.getMessage());
+            return PgInquiryResult.unknown();
+        }
+    }
+
+    private static PgInquiryResult toInquiryResult(ApproveResponse response) {
+        if (response == null || response.status() == null) {
+            return PgInquiryResult.unknown();
+        }
+        return switch (response.status()) {
+            // 취소 여부와 무관하게 한 번 승인된 결제(취소는 별도 흐름)
+            case "APPROVED", "PARTIALLY_CANCELLED", "CANCELLED" -> PgInquiryResult.approved(
+                    PgTid.of(response.pgTid()), Money.of(response.amount(), Currency.valueOf(response.currency())));
+            case "FAILED" -> PgInquiryResult.failed();
+            default -> PgInquiryResult.unknown();
+        };
     }
 
     private static PgApproveResult toResult(ApproveResponse response) {

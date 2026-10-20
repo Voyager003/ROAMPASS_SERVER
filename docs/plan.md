@@ -87,7 +87,7 @@ P1의 `Plan`·`Order`·`StatusHistory` 위에 유스케이스·영속성·API를
 - [x] **P3-3** 결제 유스케이스(Fake): `PgClient` 포트, `PaymentRepository`·`CallbackLogRepository`, 결제 요청(tx#1 `REQUESTED` → PG 호출은 트랜잭션 밖 → tx#2 결과 반영, 요청 시점 만료 재확인), "결제 확정" 단일 유스케이스(응답·웹훅 공용, 주문 `PAID`/`PICKUP_READY` + history, 만료 후 승인은 `REFUNDING`), 웹훅 처리(`CallbackLog` 선 INSERT로 중복 skip, 서명 불일치 거절, 금액 불일치 거절 + 이상 건 기록)
 - [x] **P3-4** 영속성: `V3`(`payment`·`callback_log`), 멱등 키 UNIQUE, 주문당 승인 결제 1건 부분 UNIQUE, `event_key` UNIQUE, 어댑터, 서비스 빈 등록
 - [x] **P3-5** PG HTTP 어댑터(`RestClient`, 연결·읽기 타임아웃 명시, `MockRestServiceServer` 테스트) + API: `POST /api/orders/{orderNo}/pay`, `POST /api/payments/webhook`
-- [ ] **P3-6** 응답 유실 정리 스케줄러: 오래 `REQUESTED`로 남은 결제를 PG 상태 조회로 확정
+- [x] **P3-6** 응답 유실 정리 스케줄러: 오래 `REQUESTED`로 남은 결제를 PG 상태 조회로 확정
 - [ ] **P3-7** **필수 테스트(중복 통지): 같은 승인 통지 N개 동시 → payment 1건 APPROVED, 주문 PAID 1회, 이력 1건** (스레드 수·결과를 README에) + 응답과 웹훅이 둘 다 와도 1회, 금액 불일치 거절, 승인 실패 시 주문 상태, 타임아웃 후 상태 조회로 확정
 - [ ] **P3-8** 문서: README **2.3** 중복 처리 방식·테스트 결과, **2.4** 트랜잭션 경계(PG 호출은 밖, 타임아웃 시 확정 방법), **시연 방법** 중 PG 장애 주입, decisions, 이 체크리스트
 - [x] 결정: `event_key` = PG 이벤트 ID(미결 1), 외부 호출 대역 = Fake `PgClient` 빈 + `MockRestServiceServer`(미결 6), 웹훅 서명 HMAC-SHA256 검증

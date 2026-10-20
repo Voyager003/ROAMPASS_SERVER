@@ -1,5 +1,6 @@
 package com.roampass_server.payment.application;
 
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -50,6 +51,15 @@ public class FakePaymentRepository implements PaymentRepository {
         }
         payments.put(payment.idempotencyKey(), payment);
         return true;
+    }
+
+    @Override
+    public synchronized List<Payment> findStaleRequested(Instant requestedBefore, int limit) {
+        return payments.values().stream()
+                .filter(p -> p.status() == PaymentStatus.REQUESTED && !p.requestedAt().isAfter(requestedBefore))
+                .sorted(Comparator.comparing(Payment::requestedAt))
+                .limit(limit)
+                .toList();
     }
 
     public synchronized int count() {

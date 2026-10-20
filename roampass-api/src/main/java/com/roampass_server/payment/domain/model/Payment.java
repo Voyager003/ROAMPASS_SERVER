@@ -3,8 +3,8 @@ package com.roampass_server.payment.domain.model;
 import java.time.Instant;
 import java.util.Objects;
 
-import com.roampass_server.common.domain.IllegalStateTransitionException;
-import com.roampass_server.common.domain.InvalidValueException;
+import com.roampass_server.common.domain.exception.IllegalStateTransitionException;
+import com.roampass_server.common.domain.exception.InvalidValueException;
 import com.roampass_server.common.domain.Money;
 import com.roampass_server.common.domain.OrderNo;
 

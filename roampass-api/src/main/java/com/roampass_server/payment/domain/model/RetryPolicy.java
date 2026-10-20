@@ -2,7 +2,7 @@ package com.roampass_server.payment.domain.model;
 
 import java.time.Duration;
 
-import com.roampass_server.common.domain.InvalidValueException;
+import com.roampass_server.common.domain.exception.InvalidValueException;
 
 /**
  * 실패한 작업의 재시도 횟수와 대기 시간(지수 백오프)

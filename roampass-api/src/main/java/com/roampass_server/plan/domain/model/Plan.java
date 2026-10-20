@@ -2,7 +2,7 @@ package com.roampass_server.plan.domain.model;
 
 import java.util.Objects;
 
-import com.roampass_server.common.domain.InvalidValueException;
+import com.roampass_server.common.domain.exception.InvalidValueException;
 import com.roampass_server.common.domain.Money;
 import com.roampass_server.common.domain.SimType;
 

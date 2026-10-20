@@ -1,6 +1,6 @@
 package com.roampass_server.order.domain.model;
 
-import com.roampass_server.common.domain.InvalidValueException;
+import com.roampass_server.common.domain.exception.InvalidValueException;
 import com.roampass_server.common.domain.Money;
 import com.roampass_server.common.domain.SimType;
 

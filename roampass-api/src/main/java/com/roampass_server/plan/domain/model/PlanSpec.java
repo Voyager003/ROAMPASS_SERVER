@@ -2,7 +2,7 @@ package com.roampass_server.plan.domain.model;
 
 import java.util.regex.Pattern;
 
-import com.roampass_server.common.domain.InvalidValueException;
+import com.roampass_server.common.domain.exception.InvalidValueException;
 
 /**
  * 요금제가 제공하는 것: 사용 국가, 사용 일수, 데이터 용량

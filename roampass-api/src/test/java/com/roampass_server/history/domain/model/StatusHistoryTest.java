@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import com.roampass_server.common.domain.Actor;
 import com.roampass_server.common.domain.AdminId;
-import com.roampass_server.common.domain.InvalidValueException;
+import com.roampass_server.common.domain.exception.InvalidValueException;
 import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.common.domain.UserId;
 

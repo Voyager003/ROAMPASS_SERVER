@@ -1,4 +1,4 @@
-package com.roampass_server.common.domain;
+package com.roampass_server.common.domain.exception;
 
 /**
  * 전이 규칙이 허용하지 않는 상태로의 변경 요청

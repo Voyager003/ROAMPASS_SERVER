@@ -4,8 +4,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 
-import com.roampass_server.common.domain.IllegalStateTransitionException;
-import com.roampass_server.common.domain.InvalidValueException;
+import com.roampass_server.common.domain.exception.IllegalStateTransitionException;
+import com.roampass_server.common.domain.exception.InvalidValueException;
 import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.common.domain.SimType;
 

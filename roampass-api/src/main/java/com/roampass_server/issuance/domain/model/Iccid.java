@@ -2,7 +2,7 @@ package com.roampass_server.issuance.domain.model;
 
 import java.util.regex.Pattern;
 
-import com.roampass_server.common.domain.InvalidValueException;
+import com.roampass_server.common.domain.exception.InvalidValueException;
 
 /**
  * SIM 카드 일련번호. 19~20자리 숫자, 마지막 자리는 Luhn 체크 디지트

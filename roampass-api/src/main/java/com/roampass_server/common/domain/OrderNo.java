@@ -1,5 +1,7 @@
 package com.roampass_server.common.domain;
 
+import com.roampass_server.common.domain.exception.InvalidValueException;
+
 import java.util.regex.Pattern;
 
 /**

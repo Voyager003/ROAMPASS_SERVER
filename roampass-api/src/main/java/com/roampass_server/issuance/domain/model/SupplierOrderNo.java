@@ -2,7 +2,7 @@ package com.roampass_server.issuance.domain.model;
 
 import java.util.regex.Pattern;
 
-import com.roampass_server.common.domain.InvalidValueException;
+import com.roampass_server.common.domain.exception.InvalidValueException;
 
 /**
  * 공급사가 발급 요청 접수 시 돌려주는 번호. 공급사 콜백이 주문을 가리킬 때 사용

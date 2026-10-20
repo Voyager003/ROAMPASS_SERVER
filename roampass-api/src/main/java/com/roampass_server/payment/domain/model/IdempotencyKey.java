@@ -2,7 +2,7 @@ package com.roampass_server.payment.domain.model;
 
 import java.util.regex.Pattern;
 
-import com.roampass_server.common.domain.InvalidValueException;
+import com.roampass_server.common.domain.exception.InvalidValueException;
 import com.roampass_server.common.domain.OrderNo;
 
 /**

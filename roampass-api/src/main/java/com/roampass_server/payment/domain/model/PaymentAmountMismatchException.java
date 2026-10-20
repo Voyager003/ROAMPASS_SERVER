@@ -1,6 +1,6 @@
 package com.roampass_server.payment.domain.model;
 
-import com.roampass_server.common.domain.DomainException;
+import com.roampass_server.common.domain.exception.DomainException;
 
 /**
  * 승인 통지의 금액이 결제 금액과 불일치

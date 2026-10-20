@@ -1,5 +1,7 @@
 package com.roampass_server.common.domain;
 
+import com.roampass_server.common.domain.exception.InvalidValueException;
+
 /**
  * 상태를 바꾼 주체, 상태 변경 이력에 기록: {@code USER:{id}}, {@code ADMIN:{id}},
  * {@code SYSTEM}, {@code PG}, {@code SUPPLIER}. 사용자·운영자는 식별자 보유,

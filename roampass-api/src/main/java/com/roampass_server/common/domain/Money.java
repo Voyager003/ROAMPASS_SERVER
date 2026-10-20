@@ -1,5 +1,7 @@
 package com.roampass_server.common.domain;
 
+import com.roampass_server.common.domain.exception.InvalidValueException;
+
 /**
  * 단일 통화의 금액, 통화의 최소 단위로 저장
  * 불변: 모든 연산이 새 인스턴스 반환. 음수 불가라서 "승인 금액보다 많이 취소"는

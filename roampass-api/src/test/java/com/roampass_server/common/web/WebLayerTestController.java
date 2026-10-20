@@ -4,8 +4,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.roampass_server.common.domain.AdminId;
-import com.roampass_server.common.domain.IllegalStateTransitionException;
-import com.roampass_server.common.domain.InvalidValueException;
+import com.roampass_server.common.domain.exception.IllegalStateTransitionException;
+import com.roampass_server.common.domain.exception.InvalidValueException;
 import com.roampass_server.common.domain.UserId;
 
 /**

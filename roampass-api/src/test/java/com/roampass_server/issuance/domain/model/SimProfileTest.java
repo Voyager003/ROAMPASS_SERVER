@@ -9,8 +9,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import com.roampass_server.common.domain.IllegalStateTransitionException;
-import com.roampass_server.common.domain.InvalidValueException;
+import com.roampass_server.common.domain.exception.IllegalStateTransitionException;
+import com.roampass_server.common.domain.exception.InvalidValueException;
 import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.common.domain.SimType;
 

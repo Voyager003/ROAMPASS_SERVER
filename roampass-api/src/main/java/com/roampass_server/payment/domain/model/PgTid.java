@@ -2,7 +2,7 @@ package com.roampass_server.payment.domain.model;
 
 import java.util.regex.Pattern;
 
-import com.roampass_server.common.domain.InvalidValueException;
+import com.roampass_server.common.domain.exception.InvalidValueException;
 
 /**
  * 승인 시 PG가 부여하는 거래 ID, 취소와 상태 조회에 필요

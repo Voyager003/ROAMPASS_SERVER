@@ -1,4 +1,4 @@
-package com.roampass_server.common.domain;
+package com.roampass_server.common.domain.exception;
 
 /**
  * 도메인 객체가 던지는 비즈니스 규칙 위반의 기반 클래스

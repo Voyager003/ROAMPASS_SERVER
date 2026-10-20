@@ -7,9 +7,9 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
-import com.roampass_server.common.domain.DomainException;
-import com.roampass_server.common.domain.IllegalStateTransitionException;
-import com.roampass_server.common.domain.InvalidValueException;
+import com.roampass_server.common.domain.exception.DomainException;
+import com.roampass_server.common.domain.exception.IllegalStateTransitionException;
+import com.roampass_server.common.domain.exception.InvalidValueException;
 
 import lombok.extern.slf4j.Slf4j;
 

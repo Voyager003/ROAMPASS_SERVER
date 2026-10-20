@@ -25,3 +25,4 @@
 | 18 | 2026-10-20 | 로컬 DB 접속 정보는 `.env`(compose용)와 `application-local.yml`(앱용)에 두고 둘 다 gitignore, `.example` 파일만 커밋 | compose.yaml·application.yml에 로컬 계정 직접 기입 | 로컬 전용 값이라도 비밀번호가 저장소에 들어가지 않게 함(2.7 감점 항목 "시크릿 커밋"). 대가: 두 파일의 값을 맞춰야 함 |
 | 19 | 2026-10-20 | `spring-boot-docker-compose`(bootRun 시 compose 자동 기동) 의존성 제거, compose는 `docker compose up -d`로 직접 실행 | 유지(compose에서 접속 정보 자동 주입) | 접속 정보의 출처를 `application-local.yml` 하나로 고정해 "어디서 값이 오는지"가 명확하게. README 실행 방법도 명령어 그대로 재현 가능 |
 | 20 | 2026-10-20 | 통합 테스트는 `@IntegrationTest`(SpringBootTest + test 프로필 + Testcontainers 설정) 하나로 묶고, PostgreSQL 컨테이너는 `@ServiceConnection` 빈으로 제공 | 테스트마다 `@Container` 정적 필드 | 모든 통합 테스트가 같은 설정을 쓰면 Spring 컨텍스트 캐시로 컨테이너가 사실상 한 번만 뜸. 접속 정보를 테스트에 적을 필요 없음 |
+| 21 | 2026-10-20 | 로컬 포트 고정: api 8080 / mock-pg 8081 / mock-supplier 8082. mock 패키지는 `com.roampass.mock.{pg,supplier}` | 랜덤 포트 | 세 앱을 동시에 띄우고 서로의 주소를 설정값으로 고정하기 위함. 배포 토폴로지(CLAUDE.md)의 포트와 동일 |

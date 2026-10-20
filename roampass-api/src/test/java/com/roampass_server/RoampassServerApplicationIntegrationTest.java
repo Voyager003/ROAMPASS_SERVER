@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.web.servlet.assertj.MockMvcTester;
 
 import com.roampass_server.support.IntegrationTest;
 
@@ -16,6 +17,9 @@ class RoampassServerApplicationIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private MockMvcTester mvc;
 
     @Nested
     @DisplayName("test 프로필로 기동하면")
@@ -29,6 +33,20 @@ class RoampassServerApplicationIntegrationTest {
 
             // then
             assertThat(version).startsWith("PostgreSQL 17");
+        }
+
+        @Test
+        @DisplayName("헬스 체크가 UP을 반환한다 (DB 연결 포함)")
+        void health_endpoint_reports_up() {
+            // when
+            var result = mvc.get().uri("/actuator/health");
+
+            // then
+            assertThat(result)
+                    .hasStatusOk()
+                    .bodyJson()
+                    .extractingPath("$.status")
+                    .isEqualTo("UP");
         }
     }
 }

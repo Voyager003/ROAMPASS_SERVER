@@ -3,3 +3,10 @@ spring:
     name: mock-pg
 server:
   port: 8081
+
+mock-pg:
+  webhook:
+    url: ${PG_WEBHOOK_URL:http://localhost:8080/api/payments/webhook}   # roampass-api 웹훅 수신 주소
+    # 로컬 개발용 기본값. 배포 환경은 PG_WEBHOOK_SECRET 환경변수로 교체(roampass-api와 같은 값)
+    secret: ${PG_WEBHOOK_SECRET:local-dev-webhook-secret}
+    delay: 300ms                   # 승인 응답 후 웹훅 발송까지 지연

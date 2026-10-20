@@ -8,10 +8,12 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.roampass_server.common.domain.OrderNo;
+import com.roampass_server.common.domain.PageResult;
 import com.roampass_server.common.domain.SimType;
 import com.roampass_server.order.domain.model.Order;
 import com.roampass_server.order.domain.model.OrderStatus;
 import com.roampass_server.order.domain.repository.OrderRepository;
+import com.roampass_server.order.domain.repository.OrderSearchCondition;
 
 /**
  * 테스트용 인메모리 OrderRepository. 주문번호를 키로 보관
@@ -41,6 +43,19 @@ public class FakeOrderRepository implements OrderRepository {
                 .sorted(Comparator.comparing(Order::expiresAt))
                 .limit(limit)
                 .toList();
+    }
+
+    @Override
+    public PageResult<Order> search(OrderSearchCondition c, int page, int size) {
+        List<Order> matched = orders.values().stream()
+                .filter(o -> c.status() == null || o.status() == c.status())
+                .filter(o -> c.simType() == null || o.simType() == c.simType())
+                .filter(o -> c.createdFrom() == null || !o.createdAt().isBefore(c.createdFrom()))
+                .filter(o -> c.createdTo() == null || o.createdAt().isBefore(c.createdTo()))
+                .sorted(Comparator.comparing(Order::createdAt).reversed())
+                .toList();
+        List<Order> content = matched.stream().skip((long) page * size).limit(size).toList();
+        return new PageResult<>(content, page, size, matched.size());
     }
 
     @Override

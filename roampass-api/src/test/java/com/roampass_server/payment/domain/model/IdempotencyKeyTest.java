@@ -56,4 +56,12 @@ class IdempotencyKeyTest {
                 .isInstanceOf(InvalidValueException.class)
                 .extracting("code").isEqualTo("INVALID_IDEMPOTENCY_KEY");
     }
+
+    @Test
+    @DisplayName("키에서 주문번호를 꺼낸다")
+    void extracts_order_no() {
+        // when // then
+        assertThat(IdempotencyKey.from("ORD-20261020-7K3Q9XPA-12").orderNo())
+                .isEqualTo(OrderNo.of("ORD-20261020-7K3Q9XPA"));
+    }
 }

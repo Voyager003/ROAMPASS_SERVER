@@ -7,6 +7,7 @@ import java.util.Optional;
 import com.roampass_server.callback.domain.model.CallbackLog;
 import com.roampass_server.callback.domain.model.CallbackOutcome;
 import com.roampass_server.callback.domain.repository.CallbackLogRepository;
+import com.roampass_server.common.domain.OrderNo;
 
 /**
  * 테스트용 인메모리 CallbackLogRepository
@@ -33,12 +34,17 @@ public class FakeCallbackLogRepository implements CallbackLogRepository {
     public synchronized void updateOutcome(String eventKey, CallbackOutcome outcome, String note) {
         CallbackLog current = findByEventKey(eventKey).orElseThrow();
         logs.set(logs.indexOf(current), CallbackLog.restore(current.id(), current.source(), current.eventKey(),
-                current.signatureOk(), current.payload(), outcome, note, current.receivedAt()));
+                current.orderNo(), current.signatureOk(), current.payload(), outcome, note, current.receivedAt()));
     }
 
     @Override
     public synchronized Optional<CallbackLog> findByEventKey(String eventKey) {
         return logs.stream().filter(l -> eventKey != null && eventKey.equals(l.eventKey())).findFirst();
+    }
+
+    @Override
+    public synchronized List<CallbackLog> findByOrderNo(OrderNo orderNo) {
+        return logs.stream().filter(l -> orderNo.equals(l.orderNo())).toList();
     }
 
     public synchronized List<CallbackLog> all() {

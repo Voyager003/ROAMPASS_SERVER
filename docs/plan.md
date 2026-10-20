@@ -113,7 +113,7 @@ P1의 `Plan`·`Order`·`StatusHistory` 위에 유스케이스·영속성·API를
 
 - [x] **P5-1** 설치·사용 추적(2.3-④): `SupplierClient.getProfile` 포트·어댑터, 폴링 스케줄러(미개통 SIM 중 여행 시작일 3일 전 ~ 시작일+사용일수 창 안만, 1분 주기)로 `INSTALLED`/`ENABLED`/`DELETED` 반영, `POST /api/sims/{orderNo}/qr-viewed`, **만료일 통합 테스트**(부록 A 예시)
 - [x] **P5-2** 유심 개통(2.3-③): `mock-supplier` `POST /mock/supplier/usim/activate`, `POST /api/orders/{orderNo}/usim/register` `{iccid}`(잘못된 ICCID 400, 중복 ICCID 409 — 동시 등록 포함) → 프로필 생성·주문 `ISSUED` → 공급사 개통 → `ACTIVE`(응답 유실은 폴링이 메움)
-- [ ] **P5-3** 어드민 조회(2.3-⑤): `V5` `callback_log.order_no`, `GET /admin/orders`(상태·SIM 종류·기간 필터, 페이지네이션 최대 50), `GET /admin/orders/{orderNo}`(이력 타임라인 + 결제·프로필·환불 시도·발급 요청·콜백 기록), 응답에 `asOf`
+- [x] **P5-3** 어드민 조회(2.3-⑤): `V5` `callback_log.order_no`, `GET /admin/orders`(상태·SIM 종류·기간 필터, 페이지네이션 최대 50), `GET /admin/orders/{orderNo}`(이력 타임라인 + 결제·프로필·환불 시도·발급 요청·콜백 기록), 응답에 `asOf`
 - [ ] **P5-4** 이상 건 + 운영자 조치(2.3-⑤·④): `GET /admin/issues`(결제 후 5분 미발급 / `NEEDS_ATTENTION` / 금액 불일치 / 서명 실패), `POST /admin/orders/{orderNo}/refund`(전액)·`/reissue`(`X-Admin-Id`·사유 필수, 조건부 UPDATE로 1회, history), 환불 직전 공급사 상태 재조회. 테스트: 두 운영자 동시 환불 → 1회
 - [ ] **P5-5** 문서: README **2.2** 남은 _(구현 예정)_, **2.5**(설치 판단: 신호별 신뢰도·폴링 대상·주기·신호가 틀렸을 때), **2.6** 어드민 쪽(`asOf`), **시연 방법** 설치·개통 흉내·ICCID 등록, decisions
 - [x] 결정: 폴링은 여행 시작일 창 안의 미개통 SIM만 1분, 이상 건 기준 결제 후 5분 미발급, 수동 환불은 전액만, 어드민 목록은 행별 추가 조회(N+1) + 페이지 최대 50

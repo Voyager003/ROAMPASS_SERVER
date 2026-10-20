@@ -5,6 +5,7 @@ import java.time.Instant;
 import com.roampass_server.callback.domain.model.CallbackLog;
 import com.roampass_server.callback.domain.model.CallbackOutcome;
 import com.roampass_server.callback.domain.model.CallbackSource;
+import com.roampass_server.common.domain.OrderNo;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -38,6 +39,9 @@ public class CallbackLogJpaEntity {
     @Column(name = "event_key", unique = true)
     private String eventKey;
 
+    @Column(name = "order_no")
+    private String orderNo;
+
     @Column(name = "signature_ok", nullable = false)
     private boolean signatureOk;
 
@@ -57,6 +61,7 @@ public class CallbackLogJpaEntity {
         this.id = log.id();
         this.source = log.source();
         this.eventKey = log.eventKey();
+        this.orderNo = log.orderNo() == null ? null : log.orderNo().value();
         this.signatureOk = log.signatureOk();
         this.payload = log.payload();
         this.outcome = log.outcome();
@@ -69,6 +74,7 @@ public class CallbackLogJpaEntity {
     }
 
     CallbackLog toDomain() {
-        return CallbackLog.restore(id, source, eventKey, signatureOk, payload, outcome, note, receivedAt);
+        return CallbackLog.restore(id, source, eventKey, orderNo == null ? null : OrderNo.of(orderNo), signatureOk,
+                payload, outcome, note, receivedAt);
     }
 }

@@ -1,5 +1,6 @@
 package com.roampass_server.callback.infrastructure.persistence;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Repository;
@@ -8,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.roampass_server.callback.domain.model.CallbackLog;
 import com.roampass_server.callback.domain.model.CallbackOutcome;
 import com.roampass_server.callback.domain.repository.CallbackLogRepository;
+import com.roampass_server.common.domain.OrderNo;
 
 import lombok.RequiredArgsConstructor;
 
@@ -24,7 +26,8 @@ class CallbackLogRepositoryAdapter implements CallbackLogRepository {
     @Override
     @Transactional
     public boolean insertIfAbsent(CallbackLog log) {
-        return jpaRepository.insertIfAbsent(log.source().name(), log.eventKey(), log.signatureOk(), log.payload(),
+        return jpaRepository.insertIfAbsent(log.source().name(), log.eventKey(),
+                log.orderNo() == null ? null : log.orderNo().value(), log.signatureOk(), log.payload(),
                 log.outcome().name(), log.note(), log.receivedAt()) == 1;
     }
 
@@ -43,5 +46,11 @@ class CallbackLogRepositoryAdapter implements CallbackLogRepository {
     @Override
     public Optional<CallbackLog> findByEventKey(String eventKey) {
         return jpaRepository.findByEventKey(eventKey).map(CallbackLogJpaEntity::toDomain);
+    }
+
+    @Override
+    public List<CallbackLog> findByOrderNo(OrderNo orderNo) {
+        return jpaRepository.findByOrderNoOrderByReceivedAtAscIdAsc(orderNo.value()).stream()
+                .map(CallbackLogJpaEntity::toDomain).toList();
     }
 }

@@ -50,8 +50,9 @@ public class PaymentWebhookProcessor {
             throw new InvalidValueException("INVALID_WEBHOOK", "eventId is required");
         }
         String eventKey = eventKey(command.eventId());
+        IdempotencyKey key = IdempotencyKey.from(command.idempotencyKey());
         if (!callbackLogRepository.insertIfAbsent(
-                CallbackLog.received(CallbackSource.PG, eventKey, rawBody, Instant.now(clock)))) {
+                CallbackLog.received(CallbackSource.PG, eventKey, key.orderNo(), rawBody, Instant.now(clock)))) {
             log.info("Duplicate PG webhook {}", eventKey);
             return WebhookResult.DUPLICATE;
         }

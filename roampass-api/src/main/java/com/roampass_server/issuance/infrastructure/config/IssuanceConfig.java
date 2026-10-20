@@ -1,10 +1,13 @@
 package com.roampass_server.issuance.infrastructure.config;
 
+import java.net.http.HttpClient;
 import java.time.Clock;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.web.client.RestClient;
 
 import com.roampass_server.callback.domain.repository.CallbackLogRepository;
 import com.roampass_server.callback.domain.service.HmacSignature;
@@ -12,21 +15,46 @@ import com.roampass_server.history.application.StatusHistoryRecorder;
 import com.roampass_server.issuance.application.IssuanceAcceptanceService;
 import com.roampass_server.issuance.application.IssuanceCallbackProcessor;
 import com.roampass_server.issuance.application.IssuanceCallbackService;
+import com.roampass_server.issuance.application.IssuanceDispatchService;
 import com.roampass_server.issuance.application.IssuanceFailureService;
 import com.roampass_server.issuance.application.IssuanceStartService;
 import com.roampass_server.issuance.application.IssuanceTimeoutService;
 import com.roampass_server.issuance.domain.repository.IssuanceRequestRepository;
 import com.roampass_server.issuance.domain.repository.SimProfileRepository;
+import com.roampass_server.issuance.domain.service.SupplierClient;
+import com.roampass_server.issuance.infrastructure.external.HttpSupplierClient;
 import com.roampass_server.order.domain.repository.OrderRepository;
 import com.roampass_server.payment.application.RefundOpener;
 import com.roampass_server.plan.application.PlanQueryService;
 
 /**
- * 발급 유스케이스 빈 등록. 공급사 호출이 필요한 발급 요청 조율은 공급사 어댑터와 함께 등록
+ * 발급 유스케이스·공급사 어댑터 빈 등록
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(IssuanceProperties.class)
 public class IssuanceConfig {
+
+    @Bean
+    SupplierClient supplierClient(IssuanceProperties properties) {
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(
+                HttpClient.newBuilder().connectTimeout(properties.connectTimeout()).build());
+        requestFactory.setReadTimeout(properties.readTimeout());
+        return new HttpSupplierClient(RestClient.builder()
+                .baseUrl(properties.supplierBaseUrl())
+                .requestFactory(requestFactory)
+                .build());
+    }
+
+    @Bean
+    IssuanceDispatchService issuanceDispatchService(OrderRepository orderRepository,
+                                                    IssuanceRequestRepository requestRepository,
+                                                    IssuanceStartService startService,
+                                                    IssuanceAcceptanceService acceptanceService,
+                                                    IssuanceFailureService failureService,
+                                                    SupplierClient supplierClient, IssuanceProperties properties) {
+        return new IssuanceDispatchService(orderRepository, requestRepository, startService, acceptanceService,
+                failureService, supplierClient, properties.batchSize());
+    }
 
     @Bean
     IssuanceStartService issuanceStartService(OrderRepository orderRepository,

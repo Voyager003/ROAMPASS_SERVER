@@ -44,7 +44,12 @@ roampass:
       batch-size: 50
       fixed-delay: PT15S       # 환불 실행 스케줄러 간격
   issuance:
+    supplier-base-url: ${SUPPLIER_BASE_URL:http://localhost:8082}   # mock-supplier 주소
+    connect-timeout: 2s
+    read-timeout: 5s           # 넘으면 접수 여부를 모르는 것으로 보고 같은 멱등 키로 재전송
     # 로컬 개발용 기본값. 배포 환경은 SUPPLIER_CALLBACK_SECRET 환경변수로 교체(mock-supplier와 같은 값)
     callback-secret: ${SUPPLIER_CALLBACK_SECRET:local-dev-callback-secret}
     callback-timeout: 2m       # 발급 요청 후 이 시간 안에 콜백이 없으면 ISSUE_FAILED → 자동 환불
     batch-size: 50
+    dispatch-fixed-delay: PT10S   # 발급 요청 스케줄러 간격(PAID 이심 → 공급사)
+    timeout-fixed-delay: PT30S    # 콜백 대기 초과 검사 간격

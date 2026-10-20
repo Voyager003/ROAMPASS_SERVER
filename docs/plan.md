@@ -101,7 +101,7 @@ P1의 `Plan`·`Order`·`StatusHistory` 위에 유스케이스·영속성·API를
 - [x] **P4-2** 발급·환불 유스케이스(Fake): `SupplierClient`·`PgClient.cancel` 포트, `IssuanceRequestRepository`·`SimProfileRepository`·`RefundAttemptRepository`. 발급 요청(`PAID`+ESIM을 조건부 UPDATE로 `ISSUE_REQUESTED` → 공급사 호출은 밖 → `supplierOrderNo` 저장, 접수 실패는 같은 멱등 키로 재시도), 콜백 처리(수신 기록 선 INSERT → `SimProfile` 생성 → 주문 `ISSUED`, 이미 실패 처리된 주문의 늦은 성공은 무시 + 이상 건 기록), 콜백 타임아웃(2분) → `ISSUE_FAILED` → 환불 시작, 환불 재시도(PG 취소, 최대 3회·1분부터 2배) → `REFUNDED` / 상한 초과 `NEEDS_ATTENTION`. 만료 뒤 승인(P3의 `REFUNDING`)도 같은 환불 흐름
 - [x] **P4-3** 영속성: `V4`(`issuance_request`·`sim_profile`·`refund_attempt`, 주문번호·iccid·`supplier_order_no` UNIQUE), 어댑터, 서비스 빈 등록 — **P4-2와 한 단계로 진행**(결제 확정 서비스가 환불 요청 저장소를 쓰게 되어, 저장소 구현 없이는 앱 기동 테스트가 실패하므로)
 - [x] **P4-4** HTTP 어댑터(공급사 발급 요청, PG 취소) + `POST /api/issuance/callback`(서명 검증 401, 모르는 주문 거절) + 스케줄러(발급 요청 / 콜백 타임아웃 / 환불 재시도)
-- [ ] **P4-5** **필수 테스트: 같은 콜백 N개 동시 → `sim_profile` 1개·주문 `ISSUED` 1회. 결제됐는데 발급 실패 → `ISSUE_FAILED` → 환불 시도 기록 → `REFUNDED`, 이력 흔적. 환불 3회 실패 → `NEEDS_ATTENTION`**
+- [x] **P4-5** **필수 테스트: 같은 콜백 N개 동시 → `sim_profile` 1개·주문 `ISSUED` 1회. 결제됐는데 발급 실패 → `ISSUE_FAILED` → 환불 시도 기록 → `REFUNDED`, 이력 흔적. 환불 3회 실패 → `NEEDS_ATTENTION`**
 - [ ] **P4-6** 문서: README **2.2** 표의 _(구현 예정)_ 해소, **2.3**·**2.4** 공급사 부분, **시연 방법** 공급사 장애 주입, decisions, 이 체크리스트
 - [x] 결정: 콜백 중복 키 = 공급사 이벤트 ID(`SUPPLIER:{eventId}`), 콜백 대기 2분, 환불 재시도 최대 3회·1분부터 2배(#46 유지), 늦은 성공 콜백은 무시 + 이상 건 기록 (decisions에 기록 예정)
 - 완료 기준: 중복 콜백·발급 실패 테스트 통과. 장애 주입을 켠 상태에서 결제 → 발급 → 실패 시 환불까지 사람 개입 없이 끝남

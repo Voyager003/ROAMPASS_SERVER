@@ -1,5 +1,5 @@
-# Shared configuration. Non-sensitive values only — this file is committed.
-# Sensitive values live in application-local.yml (gitignored) or environment variables (prod).
+# 공통 설정. 민감하지 않은 값만 — 이 파일은 커밋 대상
+# 민감한 값은 application-local.yml(gitignore 대상)이나 환경변수(운영)에 보관
 spring:
   application:
     name: roampass-api
@@ -8,11 +8,11 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: validate   # schema is owned by Flyway; Hibernate only validates it
+      ddl-auto: validate   # 스키마는 Flyway가 관리, Hibernate는 검증만
     properties:
       hibernate:
         jdbc:
-          time_zone: UTC   # store and read timestamps in UTC; convert to KST only when calculating/displaying
+          time_zone: UTC   # 시각은 UTC로 저장·조회, KST 변환은 계산·표시할 때만
   flyway:
     enabled: true
     locations: classpath:db/migration

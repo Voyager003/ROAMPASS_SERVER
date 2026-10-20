@@ -1,8 +1,8 @@
 package com.roampass_server.common.web;
 
 /**
- * A required identification header was not sent. Mapped to 401 by {@link GlobalExceptionHandler}.
- * Lives in the web layer because "a header is missing" is an HTTP concern, not a domain rule.
+ * 필수 식별 헤더 누락. {@link GlobalExceptionHandler}가 401로 변환
+ * "헤더가 없다"는 도메인 규칙이 아닌 HTTP 관심사라서 웹 계층에 위치
  */
 public class MissingAuthHeaderException extends RuntimeException {
 

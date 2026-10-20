@@ -1,5 +1,5 @@
-# Copy this file to application-local.yml and fill in the values.
-# Values must match .env (used by compose.yaml).
+# 이 파일을 application-local.yml로 복사한 뒤 값 입력
+# 값은 .env(compose.yaml이 사용)와 동일
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/roampass

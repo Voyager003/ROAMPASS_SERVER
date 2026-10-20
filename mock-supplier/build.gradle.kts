@@ -6,7 +6,7 @@ plugins {
 
 description = "Mock eSIM/USIM supplier"
 
-// Fake external system: no database, state is kept in memory.
+// 가짜 외부 시스템: DB 없이 상태를 메모리에 보관
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-validation")

@@ -1,4 +1,4 @@
-# Local development only. Credentials come from .env (gitignored); copy .env.example to .env first.
+# 로컬 개발 전용. 접속 정보는 .env(gitignore 대상)에서 읽으므로 .env.example을 .env로 먼저 복사
 services:
   postgres:
     image: 'postgres:17'

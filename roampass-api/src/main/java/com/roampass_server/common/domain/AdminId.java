@@ -1,8 +1,8 @@
 package com.roampass_server.common.domain;
 
 /**
- * Identifies the operator who sent an admin request (taken from the X-Admin-Id header).
- * Recorded as the actor of manual actions such as refunds and re-issuance.
+ * 어드민 요청을 보낸 운영자 식별자(X-Admin-Id 헤더 값)
+ * 환불·재발급 같은 수동 조치의 주체로 기록
  */
 public record AdminId(String value) {
 

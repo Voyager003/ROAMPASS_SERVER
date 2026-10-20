@@ -1,8 +1,8 @@
 package com.roampass_server.common.domain;
 
 /**
- * Identifies the end user who sent a request (taken from the X-User-Id header).
- * There is no member domain: the assignment allows header-level identification only.
+ * 요청을 보낸 최종 사용자 식별자(X-User-Id 헤더 값)
+ * 회원 도메인 없음: 과제가 헤더 수준의 식별만으로 충분하다고 명시
  */
 public record UserId(String value) {
 

@@ -7,16 +7,16 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
-import com.roampass_server.common.domain.DomainException;
-import com.roampass_server.common.domain.IllegalStateTransitionException;
-import com.roampass_server.common.domain.InvalidValueException;
+import com.roampass_server.common.domain.exception.DomainException;
+import com.roampass_server.common.domain.exception.IllegalStateTransitionException;
+import com.roampass_server.common.domain.exception.InvalidValueException;
 
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Maps exceptions to RFC 9457 problem details with an extra {@code code} property.
- * Extends {@link ResponseEntityExceptionHandler} so Spring MVC's own exceptions
- * (404 no handler, 405, malformed body, ...) keep their proper status instead of falling into the 500 handler.
+ * 예외를 RFC 9457 problem detail로 변환하고 {@code code} 속성 추가
+ * {@link ResponseEntityExceptionHandler}를 상속해서 Spring MVC 자체 예외
+ * (핸들러 없음 404, 405, 잘못된 요청 본문 등)가 500 핸들러로 빠지지 않고 원래 상태 코드 유지
  */
 @Slf4j
 @RestControllerAdvice
@@ -37,7 +37,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.CONFLICT, e.getCode(), e.getMessage());
     }
 
-    // Fallback for domain exceptions that have no dedicated mapping yet.
+    // 전용 매핑이 아직 없는 도메인 예외의 기본 처리
     @ExceptionHandler(DomainException.class)
     ResponseEntity<ProblemDetail> handleDomain(DomainException e) {
         return problem(HttpStatus.BAD_REQUEST, e.getCode(), e.getMessage());

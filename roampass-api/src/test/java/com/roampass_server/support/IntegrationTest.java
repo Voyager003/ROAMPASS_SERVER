@@ -11,9 +11,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * Marks a full-context integration test backed by a Testcontainers PostgreSQL instance.
- * Keeping the same annotation set on every integration test lets Spring reuse one context
- * (and one container) across test classes. MockMvc is included so HTTP-level tests share that context too.
+ * Testcontainers PostgreSQL을 쓰는 전체 컨텍스트 통합 테스트 표시
+ * 모든 통합 테스트가 같은 애너테이션 조합을 쓰면 Spring이 테스트 클래스 사이에서 컨텍스트 하나
+ * (그리고 컨테이너 하나)를 재사용. HTTP 수준 테스트도 같은 컨텍스트를 쓰도록 MockMvc 포함
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)

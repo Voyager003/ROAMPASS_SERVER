@@ -1,9 +1,11 @@
 package com.roampass_server.common.domain;
 
+import com.roampass_server.common.domain.exception.InvalidValueException;
+
 /**
- * An amount of money in a single currency, stored in the currency's minor unit.
- * Immutable: every operation returns a new instance. Never negative, so "cancel more than was approved"
- * fails here instead of producing a negative balance. Operations across currencies are rejected.
+ * 단일 통화의 금액, 통화의 최소 단위로 저장
+ * 불변: 모든 연산이 새 인스턴스 반환. 음수 불가라서 "승인 금액보다 많이 취소"는
+ * 음수 잔액 대신 여기서 실패. 서로 다른 통화끼리의 연산은 거부
  */
 public record Money(long amount, Currency currency) {
 
@@ -42,7 +44,7 @@ public record Money(long amount, Currency currency) {
 
     public Money minus(Money other) {
         requireSameCurrency(other);
-        // A negative result is rejected by the constructor (e.g. cancelling more than was approved).
+        // 음수 결과는 생성자에서 거부(예: 승인 금액보다 많이 취소)
         return new Money(amount - other.amount, currency);
     }
 

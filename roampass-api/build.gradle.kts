@@ -21,8 +21,8 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-flyway-test")
     testImplementation("org.springframework.boot:spring-boot-starter-validation-test")
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
-    // Versions are managed by the Spring Boot 4.1.1 BOM (Testcontainers 2.0.5, Awaitility 4.3.0).
-    // Testcontainers 2.x renamed its modules with a "testcontainers-" prefix.
+    // 버전은 Spring Boot 4.1.1 BOM이 관리(Testcontainers 2.0.5, Awaitility 4.3.0)
+    // Testcontainers 2.x부터 모듈 이름에 "testcontainers-" 접두사 추가
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")

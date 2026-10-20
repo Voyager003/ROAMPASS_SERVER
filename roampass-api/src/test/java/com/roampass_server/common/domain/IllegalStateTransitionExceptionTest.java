@@ -2,6 +2,8 @@ package com.roampass_server.common.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.roampass_server.common.domain.exception.DomainException;
+import com.roampass_server.common.domain.exception.IllegalStateTransitionException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

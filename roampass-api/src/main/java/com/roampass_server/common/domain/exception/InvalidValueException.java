@@ -1,7 +1,7 @@
-package com.roampass_server.common.domain;
+package com.roampass_server.common.domain.exception;
 
 /**
- * A value object or domain input failed validation (e.g. malformed identifier, negative amount).
+ * 값 객체·도메인 입력의 검증 실패(예: 형식이 틀린 식별자, 음수 금액)
  */
 public class InvalidValueException extends DomainException {
 

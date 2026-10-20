@@ -32,7 +32,10 @@ class PaymentFixture {
     final FakePaymentRepository payments = new FakePaymentRepository();
     final FakeStatusHistoryRepository histories = new FakeStatusHistoryRepository();
     final StatusHistoryRecorder recorder = new StatusHistoryRecorder(histories);
-    final PaymentConfirmationService confirmation = new PaymentConfirmationService(payments, orders, recorder, clock);
+    final FakeRefundAttemptRepository refunds = new FakeRefundAttemptRepository();
+    final RefundOpener refundOpener = new RefundOpener(payments, refunds, recorder);
+    final PaymentConfirmationService confirmation = new PaymentConfirmationService(payments, orders, recorder,
+            refundOpener, clock);
 
     Order pendingOrder(SimType simType) {
         return orders.save(Order.create(ORDER_NO, USER, PlanSnapshot.of(1L, simType, PRICE),

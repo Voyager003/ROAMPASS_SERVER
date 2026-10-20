@@ -9,6 +9,8 @@ import com.roampass_server.payment.domain.model.IdempotencyKey;
 import com.roampass_server.payment.domain.model.PgTid;
 import com.roampass_server.payment.domain.service.PgApproveRequest;
 import com.roampass_server.payment.domain.service.PgApproveResult;
+import com.roampass_server.payment.domain.service.PgCancelRequest;
+import com.roampass_server.payment.domain.service.PgCancelResult;
 import com.roampass_server.payment.domain.service.PgClient;
 import com.roampass_server.payment.domain.service.PgInquiryResult;
 
@@ -22,6 +24,22 @@ public class FakePgClient implements PgClient {
     private final List<IdempotencyKey> inquiries = new ArrayList<>();
     private final Map<IdempotencyKey, PgInquiryResult> inquiryResults = new HashMap<>();
     private PgApproveResult nextResult;
+    private final List<PgCancelRequest> cancels = new ArrayList<>();
+    private PgCancelResult cancelResult = PgCancelResult.cancelled();
+
+    public void cancelReturns(PgCancelResult result) {
+        this.cancelResult = result;
+    }
+
+    @Override
+    public PgCancelResult cancel(PgCancelRequest request) {
+        cancels.add(request);
+        return cancelResult;
+    }
+
+    public List<PgCancelRequest> cancels() {
+        return cancels;
+    }
 
     public void inquiryReturns(IdempotencyKey key, PgInquiryResult result) {
         inquiryResults.put(key, result);

@@ -56,6 +56,17 @@ public final class RefundAttempt {
         return new RefundAttempt(null, paymentKey, orderNo, amount, RefundStatus.PENDING, 0, now, null, now, null);
     }
 
+    /** 저장소에서 읽은 값으로 복원, 필수값만 확인 */
+    public static RefundAttempt restore(Long id, IdempotencyKey paymentKey, OrderNo orderNo, Money amount,
+                                        RefundStatus status, int attemptCount, Instant nextRetryAt, String lastError,
+                                        Instant createdAt, Instant completedAt) {
+        if (paymentKey == null || orderNo == null || amount == null || status == null || createdAt == null) {
+            throw new InvalidValueException("INVALID_REFUND", "Stored refund attempt is missing required values");
+        }
+        return new RefundAttempt(id, paymentKey, orderNo, amount, status, attemptCount, nextRetryAt, lastError,
+                createdAt, completedAt);
+    }
+
     /** 스케줄러가 지금 PG 취소를 시도해야 하는지 여부 */
     public boolean isDue(Instant now) {
         return status == RefundStatus.PENDING && !now.isBefore(nextRetryAt);

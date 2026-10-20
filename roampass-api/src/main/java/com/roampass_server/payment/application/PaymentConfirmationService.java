@@ -37,13 +37,15 @@ public class PaymentConfirmationService {
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
     private final StatusHistoryRecorder historyRecorder;
+    private final RefundOpener refundOpener;
     private final Clock clock;
 
     public PaymentConfirmationService(PaymentRepository paymentRepository, OrderRepository orderRepository,
-                                      StatusHistoryRecorder historyRecorder, Clock clock) {
+                                      StatusHistoryRecorder historyRecorder, RefundOpener refundOpener, Clock clock) {
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
         this.historyRecorder = historyRecorder;
+        this.refundOpener = refundOpener;
         this.clock = clock;
     }
 
@@ -108,8 +110,11 @@ public class PaymentConfirmationService {
             Order next = order.confirmPayment(now);
             if (orderRepository.saveIfStatus(next, stored)) {
                 recordOrderTransition(orderNo, stored, next.status(), actor, now);
-                return next.status() == OrderStatus.REFUNDING
-                        ? ConfirmationResult.LATE_APPROVAL_REFUNDING : ConfirmationResult.CONFIRMED;
+                if (next.status() != OrderStatus.REFUNDING) {
+                    return ConfirmationResult.CONFIRMED;
+                }
+                refundOpener.open(orderNo, Actor.system(), "만료 후 승인 — 자동 환불", now);
+                return ConfirmationResult.LATE_APPROVAL_REFUNDING;
             }
         }
         throw new IllegalStateException("Order kept changing while confirming payment: " + orderNo.value());

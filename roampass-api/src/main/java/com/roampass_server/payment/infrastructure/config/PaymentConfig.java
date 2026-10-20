@@ -19,6 +19,11 @@ import com.roampass_server.payment.application.PaymentRequestService;
 import com.roampass_server.payment.application.PaymentService;
 import com.roampass_server.payment.application.PaymentWebhookProcessor;
 import com.roampass_server.payment.application.PaymentWebhookService;
+import com.roampass_server.payment.application.RefundExecutionService;
+import com.roampass_server.payment.application.RefundOpener;
+import com.roampass_server.payment.application.RefundResultService;
+import com.roampass_server.payment.domain.model.RetryPolicy;
+import com.roampass_server.payment.domain.repository.RefundAttemptRepository;
 import com.roampass_server.payment.domain.repository.PaymentRepository;
 import com.roampass_server.payment.domain.service.PgClient;
 import com.roampass_server.payment.infrastructure.external.HttpPgClient;
@@ -37,10 +42,37 @@ public class PaymentConfig {
     }
 
     @Bean
+    RefundOpener refundOpener(PaymentRepository paymentRepository, RefundAttemptRepository refundAttemptRepository,
+                              StatusHistoryRecorder historyRecorder) {
+        return new RefundOpener(paymentRepository, refundAttemptRepository, historyRecorder);
+    }
+
+    @Bean
+    RefundResultService refundResultService(RefundAttemptRepository refundAttemptRepository,
+                                            PaymentRepository paymentRepository, OrderRepository orderRepository,
+                                            StatusHistoryRecorder historyRecorder, PaymentProperties properties,
+                                            Clock clock) {
+        PaymentProperties.Refund refund = properties.refund();
+        return new RefundResultService(refundAttemptRepository, paymentRepository, orderRepository, historyRecorder,
+                RetryPolicy.of(refund.maxAttempts(), refund.baseDelay(), refund.maxDelay()), clock);
+    }
+
+    @Bean
+    RefundExecutionService refundExecutionService(RefundAttemptRepository refundAttemptRepository,
+                                                  PaymentRepository paymentRepository, PgClient pgClient,
+                                                  RefundResultService resultService, PaymentProperties properties,
+                                                  Clock clock) {
+        return new RefundExecutionService(refundAttemptRepository, paymentRepository, pgClient, resultService, clock,
+                properties.refund().batchSize());
+    }
+
+    @Bean
     PaymentConfirmationService paymentConfirmationService(PaymentRepository paymentRepository,
                                                           OrderRepository orderRepository,
-                                                          StatusHistoryRecorder historyRecorder, Clock clock) {
-        return new PaymentConfirmationService(paymentRepository, orderRepository, historyRecorder, clock);
+                                                          StatusHistoryRecorder historyRecorder,
+                                                          RefundOpener refundOpener, Clock clock) {
+        return new PaymentConfirmationService(paymentRepository, orderRepository, historyRecorder, refundOpener,
+                clock);
     }
 
     @Bean

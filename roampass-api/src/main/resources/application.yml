@@ -37,3 +37,14 @@ roampass:
       stale-after: 1m          # 요청 후 1분 지난 REQUESTED만 PG에 조회(읽기 타임아웃 5초보다 길게)
       batch-size: 50           # 1회 최대 조회 건수
       fixed-delay: PT30S       # 실행 간격(ISO-8601, 이전 실행 종료 기준)
+    refund:
+      max-attempts: 3          # PG 취소 최대 시도 횟수, 모두 실패하면 NEEDS_ATTENTION(운영자 확인)
+      base-delay: 1m           # 첫 실패 후 대기, 이후 2배(1분 → 2분)
+      max-delay: 30m
+      batch-size: 50
+      fixed-delay: PT15S       # 환불 실행 스케줄러 간격
+  issuance:
+    # 로컬 개발용 기본값. 배포 환경은 SUPPLIER_CALLBACK_SECRET 환경변수로 교체(mock-supplier와 같은 값)
+    callback-secret: ${SUPPLIER_CALLBACK_SECRET:local-dev-callback-secret}
+    callback-timeout: 2m       # 발급 요청 후 이 시간 안에 콜백이 없으면 ISSUE_FAILED → 자동 환불
+    batch-size: 50

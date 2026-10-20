@@ -162,4 +162,23 @@ class RefundAttemptTest {
             assertThat(refund.lastError()).hasSize(500);
         }
     }
+
+    @Nested
+    @DisplayName("저장소에서 복원하면")
+    class WhenRestored {
+
+        @Test
+        @DisplayName("모든 값을 그대로 가지고 시도 시각이 되면 처리 대상이다")
+        void keeps_all_values() {
+            // when
+            RefundAttempt attempt = RefundAttempt.restore(9L, PAYMENT_KEY, ORDER_NO, AMOUNT, RefundStatus.PENDING, 1,
+                    NOW.plusSeconds(60), "timeout", NOW, null);
+
+            // then
+            assertThat(attempt.id()).isEqualTo(9L);
+            assertThat(attempt.attemptCount()).isEqualTo(1);
+            assertThat(attempt.isDue(NOW)).isFalse();
+            assertThat(attempt.isDue(NOW.plusSeconds(60))).isTrue();
+        }
+    }
 }

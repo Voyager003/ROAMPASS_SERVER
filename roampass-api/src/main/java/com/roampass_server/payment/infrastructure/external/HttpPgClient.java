@@ -13,6 +13,8 @@ import com.roampass_server.payment.domain.model.IdempotencyKey;
 import com.roampass_server.payment.domain.model.PgTid;
 import com.roampass_server.payment.domain.service.PgApproveRequest;
 import com.roampass_server.payment.domain.service.PgApproveResult;
+import com.roampass_server.payment.domain.service.PgCancelRequest;
+import com.roampass_server.payment.domain.service.PgCancelResult;
 import com.roampass_server.payment.domain.service.PgClient;
 import com.roampass_server.payment.domain.service.PgInquiryResult;
 
@@ -70,6 +72,24 @@ public class HttpPgClient implements PgClient {
         }
     }
 
+    @Override
+    public PgCancelResult cancel(PgCancelRequest request) {
+        try {
+            restClient.post().uri("/mock/pg/cancel")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(new CancelBody(request.pgTid().value(), request.cancelKey(), request.amount().amount()))
+                    .retrieve()
+                    .toBodilessEntity();
+            return PgCancelResult.cancelled();
+        } catch (HttpClientErrorException e) {
+            log.warn("PG rejected cancel {}: {}", request.cancelKey(), e.getStatusCode());
+            return PgCancelResult.failed("PG_REJECTED_" + e.getStatusCode().value());
+        } catch (RestClientException e) {
+            log.warn("PG cancel result unknown {}: {}", request.cancelKey(), e.getMessage());
+            return PgCancelResult.unknown(e.getClass().getSimpleName());
+        }
+    }
+
     private static PgInquiryResult toInquiryResult(ApproveResponse response) {
         if (response == null || response.status() == null) {
             return PgInquiryResult.unknown();
@@ -93,6 +113,9 @@ public class HttpPgClient implements PgClient {
             case "FAILED" -> PgApproveResult.failed("PG_DECLINED");
             default -> PgApproveResult.unknown("UNEXPECTED_STATUS_" + response.status());
         };
+    }
+
+    record CancelBody(String pgTid, String cancelKey, long amount) {
     }
 
     record ApproveBody(String idempotencyKey, String orderNo, long amount, String currency) {

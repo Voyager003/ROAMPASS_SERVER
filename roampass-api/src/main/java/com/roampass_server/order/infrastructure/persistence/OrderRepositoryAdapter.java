@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.order.domain.model.Order;
+import com.roampass_server.common.domain.SimType;
 import com.roampass_server.order.domain.model.OrderStatus;
 import com.roampass_server.order.domain.repository.OrderRepository;
 
@@ -39,6 +40,14 @@ class OrderRepositoryAdapter implements OrderRepository {
     public List<Order> findExpirable(Instant now, int limit) {
         return jpaRepository.findByStatusAndExpiresAtLessThanEqualOrderByExpiresAtAsc(
                         OrderStatus.PENDING, now, PageRequest.of(0, limit)).stream()
+                .map(OrderJpaEntity::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<Order> findIssuable(int limit) {
+        return jpaRepository.findByStatusAndSimTypeOrderByCreatedAtAsc(OrderStatus.PAID,
+                        SimType.ESIM, PageRequest.of(0, limit)).stream()
                 .map(OrderJpaEntity::toDomain)
                 .toList();
     }

@@ -56,6 +56,9 @@ curl -i -X POST localhost:8080/api/orders -H 'X-User-Id: user-1' \
 
 # 주문 조회 (남의 주문은 404)
 curl localhost:8080/api/orders/{orderNo} -H 'X-User-Id: user-1'
+
+# 결제 (mock-pg가 떠 있어야 함) → paymentStatus·orderStatus
+curl -X POST localhost:8080/api/orders/{orderNo}/pay -H 'X-User-Id: user-1'
 ```
 - 응답 시각은 UTC ISO-8601(`...Z`)입니다. 에러는 RFC 9457 `ProblemDetail`에 `code`(예: `ORDER_NOT_FOUND`, `INVALID_REQUEST`)가 붙습니다.
 - `travelStartDate`는 KST 기준 오늘부터 1년 이내여야 합니다.
@@ -84,7 +87,7 @@ curl localhost:8080/api/orders/{orderNo} -H 'X-User-Id: user-1'
 
 ### 2.2 결제, 발급, 주문 상태 설계
 
-> 상태와 전이 규칙은 도메인 모델(순수 Java)로 구현되어 단위 테스트로 고정되어 있습니다. 상태를 바꾸는 주체(스케줄러·콜백·API) 중 주문 생성(API)과 결제 대기 만료(스케줄러)는 연결되어 있고, 아직 구현 전인 부분은 _(구현 예정)_ 으로 표시했습니다.
+> 상태와 전이 규칙은 도메인 모델(순수 Java)로 구현되어 단위 테스트로 고정되어 있습니다. 상태를 바꾸는 주체(스케줄러·콜백·API) 중 주문 생성(API), 결제 대기 만료(스케줄러), 결제 확정(승인 응답·PG 웹훅·상태 조회 스케줄러)은 연결되어 있고, 아직 구현 전인 부분은 _(구현 예정)_ 으로 표시했습니다.
 
 **원칙: 주문 상태와 SIM 상태를 나눴습니다.**
 - **주문(`Order`)**: 돈을 받고 SIM을 내주기까지(결제 → 발급 → 환불). 이심이든 유심이든 SIM을 내주면 `ISSUED`로 끝납니다.
@@ -168,7 +171,8 @@ stateDiagram-v2
 - 같은 승인(같은 PG 거래 ID)이 다시 오면 아무것도 바꾸지 않습니다. 승인 응답과 웹훅이 둘 다 오거나 웹훅이 여러 번 와도 한 번만 반영됩니다.
 - 통지 금액이 결제 금액과 다르면 승인하지 않습니다(결제는 `REQUESTED`로 남음).
 - `APPROVED`와 `FAILED`는 서로 뒤집히지 않습니다. 취소 누적액은 승인 금액을 넘을 수 없습니다.
-- PG 응답이 유실되면 `REQUESTED`로 남겨 두고, PG 상태 조회나 웹훅으로 확정합니다 _(구현 예정)_.
+- PG 응답이 유실되면 `REQUESTED`로 남겨 두고, 웹훅이나 상태 조회 스케줄러(요청 후 1분 지난 건을 30초마다 조회)로 확정합니다. PG가 요청을 받은 적 없으면(404) `FAILED`로 닫아 다시 결제할 수 있게 합니다.
+- 결과를 모르는 `REQUESTED` 시도가 있는 동안에는 새 결제를 받지 않습니다(이중 결제 방지, 2.4 참고).
 
 #### 환불 요청 상태
 ```mermaid
@@ -198,7 +202,69 @@ stateDiagram-v2
 
 ### 2.3 중복 처리를 어떻게 막았고, 어떻게 증명했습니까?
 
+> 결제 통지 부분입니다. 공급사 콜백(프로필 1개)은 발급 단계에서 같은 구성요소로 추가합니다 _(구현 예정)_.
+
+**결제 통지: 세 겹으로 막습니다.** 승인 응답·웹훅·상태 조회 세 경로가 모두 같은 "결제 확정" 유스케이스 하나를 거칩니다.
+
+| 단계 | 막는 것 | 방법 |
+|---|---|---|
+| ① 수신 기록 | 같은 웹훅의 재전송(같은 `eventId`) | `callback_log.event_key` UNIQUE + `INSERT ... ON CONFLICT DO NOTHING`. 영향 행 0이면 중복으로 보고 아무것도 하지 않음 |
+| ② 결제 상태 | 다른 경로로 같은 승인이 또 옴(응답 + 웹훅, 서로 다른 이벤트) | 도메인: 같은 PG 거래 ID의 승인은 변화 없음. DB: `UPDATE payment ... WHERE idempotency_key = ? AND status = 'REQUESTED'`, 영향 행 0이면 이미 반영됨 |
+| ③ 주문 상태 | 결제 확정과 만료 스케줄러의 경합 | `UPDATE orders ... WHERE order_no = ? AND status = ?`(읽은 상태 그대로일 때만). 실패하면 다시 읽어 판단(만료됐으면 `REFUNDING`) |
+| 최후 방어 | 위 검사가 모두 뚫린 경우 | 부분 유니크 인덱스: 주문당 승인된 결제 최대 1건 |
+
+동시에 두 트랜잭션이 같은 행을 바꾸려 하면, 나중 쪽은 앞 트랜잭션이 커밋할 때까지 기다린 뒤 조건(`status = 'REQUESTED'`)을 다시 검사해 0행을 받습니다. 그래서 상태 변경과 이력 기록은 한쪽에서만 일어납니다.
+
+**고른 방법과 버린 방법**
+
+| 방법 | 판단 |
+|---|---|
+| 조건부 UPDATE + 유니크 제약 | **채택.** 검사와 변경을 DB가 한 문장으로 처리. 실패가 예외가 아니라 "영향 행 0"이라는 결과값이라, 같은 트랜잭션 안에서 "이미 처리됨"을 기록하고 정상 종료할 수 있음 |
+| 비관적 락(`SELECT ... FOR UPDATE`) | 정확하지만 조회부터 커밋까지 잠금을 쥐고, 결제·주문을 함께 다루는 경로마다 잠금 순서를 맞춰야 함. 조건부 UPDATE도 행 잠금을 쓰지만 UPDATE 한 문장 동안만 기다림 |
+| 낙관적 락(`@Version`) | 충돌이 예외로 나와 트랜잭션이 롤백 전용이 됨 → 웹훅 수신 기록까지 함께 롤백. 재시도 코드와 도메인의 version 필드가 필요 |
+| 유니크 위반 예외로 중복 판정 | PostgreSQL은 예외가 나면 트랜잭션 전체를 중단시켜 후속 처리를 못 함 → `ON CONFLICT DO NOTHING`으로 대체 |
+| 분산 락(Redis 등) | 인프라가 하나 늘고, DB 하나로 충분한 규모(1GB 인스턴스) |
+
+**증명: 동시성 테스트** (`e2e/PaymentDuplicateNotificationConcurrencyTest`, Testcontainers PostgreSQL 17, 스레드가 출발선에서 동시에 시작)
+
+| 시나리오 | 스레드 | 결과 | 검증 |
+|---|---|---|---|
+| 같은 승인 웹훅(같은 `eventId`, 실제 서명) | 16 | `PROCESSED` 1, `DUPLICATE` 15 | 결제 `APPROVED`, 주문 `PAID`, 결제 승인·주문 확정 이력 각 1건, `callback_log` 1건 |
+| 승인 응답 경로 8 + 서로 다른 `eventId` 웹훅 8 | 16 | 반영 1, `ALREADY_APPLIED` 15 | 결제 `APPROVED`, 주문 `PAID`, 결제 승인·주문 확정 이력 각 1건 |
+
+실행 결과(2026-10-21, 로컬 macOS, `./gradlew test`): 두 테스트 통과(0.068초, 0.048초), 전체 404개 통과·실패 0.
+
+```
+./gradlew :roampass-api:test --tests '*PaymentDuplicateNotificationConcurrencyTest'
+```
+
 ### 2.4 트랜잭션 경계
+
+> 결제 부분입니다. 공급사 호출(발급)은 발급 단계에서 추가합니다 _(구현 예정)_.
+
+**PG 호출은 DB 트랜잭션 밖입니다.**
+```
+결제 요청: [tx#1] 결제 가능 확인 → REQUESTED 저장 → 커밋
+           → PG 승인 호출 (트랜잭션 없음, 연결 2초·응답 5초 타임아웃)
+           → [tx#2] 결과 반영(결제 확정 유스케이스)
+웹훅:      [tx] 수신 기록 INSERT → 결제 확정 → 처리 결과 기록
+상태 조회:  30초마다 1분 지난 REQUESTED를 PG에 조회(트랜잭션 없음) → [tx] 결제 확정
+```
+- **밖에 둔 이유**: PG 응답을 기다리는 최대 5초 동안 DB 커넥션을 쥐고 있지 않기 위해서입니다(커넥션 풀 기본 10개). 그리고 PG 승인은 우리 DB 트랜잭션을 롤백해도 취소되지 않으므로, 같은 트랜잭션에 묶어도 원자성을 얻지 못합니다.
+- **tx#1을 PG 호출 전에 커밋하는 이유**: 승인 응답보다 웹훅이 먼저 도착해도 결제 시도를 찾을 수 있게 하기 위해서입니다.
+- **PG는 승인했는데 tx#2가 실패하면**: 결제는 `REQUESTED`로 남고, 웹훅이나 상태 조회 스케줄러가 같은 결제 확정 유스케이스로 다시 반영합니다. 확정은 여러 번 실행돼도 한 번만 반영되도록 만들어져 있습니다(2.3).
+- **타임아웃(결과를 모름)**: 결제를 `REQUESTED`로 두고 응답에도 그대로 알려 줍니다. 이후 웹훅이나 상태 조회(멱등 키로 조회)로 확정합니다. PG의 4xx는 거절이 확실하므로 `FAILED`, 5xx·타임아웃은 처리 여부를 알 수 없으므로 `REQUESTED` 유지입니다.
+
+**결제 버튼 연타 · 타임아웃 후 재시도를 막는 키**
+
+| 상황 | 막는 방법 |
+|---|---|
+| 연타(순차) | 결과를 모르는 `REQUESTED` 시도가 있으면 새 결제 거절: 409 `PAYMENT_IN_PROGRESS`. 이미 결제된 주문은 409 `ORDER_NOT_PAYABLE` |
+| 연타(동시) | 두 요청이 같은 시도 번호를 계산해도 멱등 키 `{주문번호}-{시도 번호}`가 UNIQUE라 하나만 저장, 나머지는 409 `PAYMENT_IN_PROGRESS` |
+| 타임아웃 후 재시도 | 앞 시도가 `REQUESTED`로 남아 있어 새 시도는 409. 웹훅이나 상태 조회로 앞 시도가 확정된 뒤에만 다음 키(`-2`)로 결제 가능. 같은 키가 PG에 다시 가도 mock-pg는 처음 결과를 돌려주고 한 번만 승인 |
+| 그래도 두 번 승인되면 | 부분 유니크 인덱스(주문당 승인 결제 1건)가 두 번째 반영을 거부 |
+
+**웹훅 응답 코드**: 받은 통지가 진짜 PG가 보낸 것이면 처리 결과와 관계없이 200을 주고, 결과는 본문 `result`에 담습니다(`PROCESSED`, `DUPLICATE`, `ALREADY_APPLIED`, `AMOUNT_MISMATCH` 등). 4xx·5xx는 PG에게 "다시 보내라"는 신호로 쓰입니다. 금액 불일치는 다시 받아도 결과가 같으니 200으로 받고, 거절과 이상 건은 `callback_log`에 남깁니다. 서명 불일치는 401, 본문 형식 오류는 400, 처리 중 예상 못 한 오류는 500(트랜잭션 롤백 → PG가 재전송하면 다시 처리)입니다. 웹훅은 받은 요청 안에서 동기로 처리합니다. 처리하는 일이 DB 갱신 몇 건이라 PG의 응답 제한 시간(예: 토스페이먼츠 10초) 안에 끝난다고 판단했습니다.
 
 ### 2.5 "이 사용자가 SIM을 설치했다"를 무엇으로 판단
 
@@ -212,7 +278,42 @@ stateDiagram-v2
 
 ## 시연 방법
 
-_(모의 PG·공급사의 실패·지연·중복을 켜는 방법, 설치·개통을 흉내 내는 방법)_
+### 모의 PG 장애 주입
+`mock-pg`는 시작 설정(`mock-pg/src/main/resources/application.yml`의 `mock-pg.faults.*`, 기본은 장애 없음)과 실행 중 변경 API를 제공합니다. `PUT`은 설정 전체를 교체하며, 빠진 항목은 장애 없음으로 바뀝니다.
+
+```bash
+# 현재 설정 / 초기화
+curl localhost:8081/mock/pg/config
+curl -X POST localhost:8081/mock/pg/config/reset
+
+# 승인 실패율 50%
+curl -X PUT localhost:8081/mock/pg/config -H 'Content-Type: application/json' -d '{"approveFailureRate": 0.5}'
+
+# 같은 웹훅 3번 더 보내기(같은 eventId) → 결제는 한 번만 반영
+# (보통 승인 응답이 먼저 반영되어 첫 웹훅은 ALREADY_APPLIED, 같은 eventId 재수신은 DUPLICATE)
+curl -X PUT localhost:8081/mock/pg/config -H 'Content-Type: application/json' -d '{"webhookDuplicates": 3}'
+
+# 응답 지연 6초(> roampass-api 읽기 타임아웃 5초) + 웹훅 생략
+# → 결제는 REQUESTED로 남고, 약 1분 뒤 상태 조회 스케줄러가 PG에 물어 APPROVED로 확정
+curl -X PUT localhost:8081/mock/pg/config -H 'Content-Type: application/json' -d '{"responseDelayMs": 6000, "webhookDrop": true}'
+
+# 웹훅 금액 변조(+100원) + 응답 지연 → 변조된 웹훅은 AMOUNT_MISMATCH로 거절·기록(callback_log)
+# → 약 1분 뒤 상태 조회 스케줄러가 PG에 저장된 실제 금액(일치)을 확인해 APPROVED로 확정
+curl -X PUT localhost:8081/mock/pg/config -H 'Content-Type: application/json' -d '{"webhookAmountDelta": 100, "responseDelayMs": 6000}'
+```
+
+| 항목 | 의미 |
+|---|---|
+| `approveFailureRate` | 승인 실패 확률(0~1). 실패면 `FAILED` + 실패 웹훅 |
+| `responseDelayMs` | 승인 응답 지연(0~60000). 결제 기록·웹훅 예약 뒤에 지연하므로 "처리됐지만 응답 유실"이 재현됨 |
+| `webhookDuplicates` | 같은 웹훅 추가 발송 횟수(0~10) |
+| `webhookDrop` | 웹훅 생략 |
+| `webhookAmountDelta` | 웹훅 금액에 더할 차액(PG 저장 금액은 그대로) |
+| `cancelFailureRate` | 취소 실패 확률(0~1). 실패면 500 `CANCEL_FAILED`, 취소는 반영 안 됨 |
+
+웹훅 서명 비밀키는 두 앱이 같은 환경변수 `PG_WEBHOOK_SECRET`을 쓰며, 로컬에서는 같은 기본값이 들어 있어 따로 설정할 필요가 없습니다.
+
+_(모의 공급사 장애 주입과 설치·개통 흉내는 발급 단계에서 추가)_
 
 ---
 
@@ -240,6 +341,7 @@ com.roampass_server
 │   ├── api/          # 공용 응답 DTO(MoneyResponse)
 │   ├── web/          # 에러 응답(ProblemDetail + code), 식별 헤더 처리
 │   └── config/       # Clock 빈, 스케줄러 on/off
+├── callback/         # 외부 통지 수신 기록(중복 판정·서명 검증), PG 웹훅·공급사 콜백 공용
 └── {도메인}/      # plan, order, payment, issuance, admin, history (단계별로 추가)
     ├── api/             # 컨트롤러, 요청·응답 DTO
     ├── application/     # 유스케이스, 트랜잭션 경계
@@ -264,12 +366,13 @@ com.roampass_server
 - 데이터 용량은 요금제 전체 기간의 총량(MB)으로 가정했습니다. 과제에는 하루 기준인지 총량인지 나와 있지 않습니다.
 
 ### 데이터 모델 (현재 스키마)
-스키마는 Flyway(`db/migration`)가 관리하고, Hibernate는 `ddl-auto: validate`로 검증만 합니다. 결제·발급 테이블은 해당 단계에서 추가합니다.
+스키마는 Flyway(`db/migration`)가 관리하고, Hibernate는 `ddl-auto: validate`로 검증만 합니다. 발급 테이블은 해당 단계에서 추가합니다.
 
 ```mermaid
 erDiagram
     plan ||--o{ orders : "plan_id"
     orders ||--o{ status_history : "order_no"
+    orders ||--o{ payment : "order_no"
     plan {
         BIGSERIAL id PK
         VARCHAR country_code
@@ -304,6 +407,29 @@ erDiagram
         VARCHAR reason
         TIMESTAMPTZ occurred_at
     }
+    payment {
+        BIGSERIAL id PK
+        VARCHAR idempotency_key UK
+        VARCHAR order_no FK
+        BIGINT amount
+        VARCHAR currency
+        VARCHAR status
+        VARCHAR pg_tid
+        BIGINT cancelled_amount
+        VARCHAR failure_reason
+        TIMESTAMPTZ requested_at
+        TIMESTAMPTZ approved_at
+    }
+    callback_log {
+        BIGSERIAL id PK
+        VARCHAR source
+        VARCHAR event_key UK
+        BOOLEAN signature_ok
+        TEXT payload
+        VARCHAR outcome
+        VARCHAR note
+        TIMESTAMPTZ received_at
+    }
 ```
 
 | 인덱스 | 쓰는 곳 |
@@ -311,6 +437,11 @@ erDiagram
 | `orders(status, expires_at)` | 만료 스케줄러: `PENDING`이면서 만료 시각이 지난 주문 |
 | `orders(user_id, created_at)` | 내 주문 목록 |
 | `status_history(order_no, occurred_at, id)` | 어드민 주문 타임라인 |
+| `payment(idempotency_key)` UNIQUE | 결제 시도 1건 = 키 1개, 동시 결제 요청 중 하나만 저장 |
+| `payment(order_no)` 부분 UNIQUE (`status IN ('APPROVED','PARTIALLY_CANCELLED','CANCELLED')`) | 주문당 승인된 결제 최대 1건 |
+| `payment(order_no, requested_at)` | 주문의 결제 시도 목록 |
+| `payment(status, requested_at)` | 상태 조회 스케줄러: 오래된 `REQUESTED` |
+| `callback_log(event_key)` UNIQUE (NULL 허용) | 같은 통지의 중복 판정. 서명 실패 기록은 키 없이 저장해 위조 요청이 키를 선점하지 못함 |
 
 - 상태·종류는 enum 이름 문자열, 시각은 `TIMESTAMPTZ`(UTC), 금액은 통화 최소 단위 `BIGINT` + 통화 코드입니다.
 - 요금제 시드는 16개(일본·미국·베트남·태국 × 이심·유심 × 2종)이며, 유심은 같은 구성의 이심보다 2,000원 비쌉니다.
@@ -318,4 +449,10 @@ erDiagram
 ---
 
 ## 미구현 · 타협한 부분과 이유
+
+- **만료 뒤 도착한 승인의 실제 환불**: 지금은 주문을 `REFUNDING`으로 바꾸고 이력을 남기는 데까지입니다. PG 취소 실행과 재시도는 환불 흐름과 함께 발급 단계에서 연결합니다.
+- **PG에서 다른 금액으로 승인된 결제**: 확정하지 않고 `REQUESTED`로 남기며, 상태 조회 때마다 ERROR 로그를 남깁니다. 그동안 그 주문은 새 결제도 막힙니다. 운영자 확인 대상으로 넘기는 처리는 어드민 단계에서 연결합니다.
+- **웹훅 동기 처리**: 받은 요청 안에서 처리합니다. 처리량이 커지면 수신 기록만 남기고 큐로 넘기는 구조가 맞지만, 이 규모에서는 단순한 쪽을 택했습니다.
+- **mock-pg 웹훅 재시도 없음**: 실제 PG처럼 실패 시 재전송하지는 않습니다. 중복 수신은 장애 주입의 `webhookDuplicates`로 재현합니다.
+- **PG 웹훅 서명 검증은 과제 요구 밖**: 과제는 공급사 콜백의 서명 검증만 요구합니다. 위조 통지로 결제가 확정되는 것을 막기 위해 PG 웹훅에도 HMAC-SHA256 서명을 적용했습니다.
 

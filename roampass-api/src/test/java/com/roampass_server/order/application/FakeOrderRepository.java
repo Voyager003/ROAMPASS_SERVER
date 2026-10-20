@@ -1,11 +1,15 @@
 package com.roampass_server.order.application;
 
+import java.time.Instant;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.order.domain.model.Order;
+import com.roampass_server.order.domain.model.OrderStatus;
 import com.roampass_server.order.domain.repository.OrderRepository;
 
 /**
@@ -27,6 +31,30 @@ public class FakeOrderRepository implements OrderRepository {
     @Override
     public Optional<Order> findByOrderNo(OrderNo orderNo) {
         return Optional.ofNullable(orders.get(orderNo));
+    }
+
+    @Override
+    public List<Order> findExpirable(Instant now, int limit) {
+        return orders.values().stream()
+                .filter(o -> o.status() == OrderStatus.PENDING && !now.isBefore(o.expiresAt()))
+                .sorted(Comparator.comparing(Order::expiresAt))
+                .limit(limit)
+                .toList();
+    }
+
+    @Override
+    public boolean saveIfStatus(Order order, OrderStatus expected) {
+        Order current = orders.get(order.orderNo());
+        if (current == null || current.status() != expected) {
+            return false; // 그 사이 다른 쪽이 상태를 바꿈
+        }
+        orders.put(order.orderNo(), order);
+        return true;
+    }
+
+    /** 테스트에서 저장된 주문을 직접 바꿔 동시 변경을 흉내 낼 때 사용 */
+    public void replace(Order order) {
+        orders.put(order.orderNo(), order);
     }
 
     public int count() {

@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import com.roampass_server.callback.application.InvalidSignatureException;
+import com.roampass_server.common.application.exception.ConflictException;
 import com.roampass_server.common.application.exception.NotFoundException;
 import com.roampass_server.common.domain.exception.DomainException;
 import com.roampass_server.common.domain.exception.IllegalStateTransitionException;
@@ -34,6 +36,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(NotFoundException.class)
     ResponseEntity<ProblemDetail> handleNotFound(NotFoundException e) {
         return problem(HttpStatus.NOT_FOUND, e.getCode(), e.getMessage());
+    }
+
+    @ExceptionHandler(ConflictException.class)
+    ResponseEntity<ProblemDetail> handleConflict(ConflictException e) {
+        return problem(HttpStatus.CONFLICT, e.getCode(), e.getMessage());
+    }
+
+    @ExceptionHandler(InvalidSignatureException.class)
+    ResponseEntity<ProblemDetail> handleInvalidSignature(InvalidSignatureException e) {
+        return problem(HttpStatus.UNAUTHORIZED, InvalidSignatureException.CODE, e.getMessage());
     }
 
     @ExceptionHandler(InvalidValueException.class)

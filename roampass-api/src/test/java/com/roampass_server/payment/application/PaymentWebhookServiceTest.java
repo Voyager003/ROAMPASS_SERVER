@@ -40,7 +40,7 @@ class PaymentWebhookServiceTest {
 
     private WebhookResult send(PaymentWebhookCommand command) {
         String body = "body-of-" + command.eventId() + "-" + command.amount(); // 서명 대상 원문(내용은 무관)
-        return service.receive(command, body, signer.sign(body));
+        return service.receive(body, signer.sign(body), raw -> command);
     }
 
     private void givenPendingPayment() {
@@ -141,7 +141,7 @@ class PaymentWebhookServiceTest {
             givenPendingPayment();
 
             // when // then
-            assertThatThrownBy(() -> service.receive(approved("evt_1", 9_900), "body", "deadbeef"))
+            assertThatThrownBy(() -> service.receive("body", "deadbeef", raw -> approved("evt_1", 9_900)))
                     .isInstanceOf(InvalidSignatureException.class);
             assertThat(logs.all()).singleElement().satisfies(log -> {
                 assertThat(log.eventKey()).isNull();
@@ -152,11 +152,23 @@ class PaymentWebhookServiceTest {
         }
 
         @Test
+        @DisplayName("서명이 틀리면 본문을 해석하지 않는다")
+        void does_not_parse_unverified_body() {
+            // given
+            givenPendingPayment();
+
+            // when // then
+            assertThatThrownBy(() -> service.receive("not-json", "deadbeef", raw -> {
+                throw new AssertionError("parser must not be called");
+            })).isInstanceOf(InvalidSignatureException.class);
+        }
+
+        @Test
         @DisplayName("위조 요청이 이벤트 키를 선점하지 못해, 같은 eventId의 진짜 웹훅은 정상 처리")
         void forged_request_cannot_claim_event_key() {
             // given
             givenPendingPayment();
-            assertThatThrownBy(() -> service.receive(approved("evt_1", 9_900), "body", "deadbeef"))
+            assertThatThrownBy(() -> service.receive("body", "deadbeef", raw -> approved("evt_1", 9_900)))
                     .isInstanceOf(InvalidSignatureException.class);
 
             // when

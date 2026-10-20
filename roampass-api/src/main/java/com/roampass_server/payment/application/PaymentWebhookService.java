@@ -2,6 +2,7 @@ package com.roampass_server.payment.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.function.Function;
 
 import com.roampass_server.callback.application.InvalidSignatureException;
 import com.roampass_server.callback.domain.model.CallbackLog;
@@ -34,14 +35,16 @@ public class PaymentWebhookService {
     /**
      * @param rawBody         받은 본문 원문(서명 대상)
      * @param signatureHeader X-PG-Signature 헤더 값
+     * @param parser          본문 → 명령 변환, 서명 검증 통과 후에만 호출(검증 안 된 본문은 해석하지 않음)
      * @throws InvalidSignatureException 서명 불일치(401)
      */
-    public WebhookResult receive(PaymentWebhookCommand command, String rawBody, String signatureHeader) {
+    public WebhookResult receive(String rawBody, String signatureHeader,
+                                 Function<String, PaymentWebhookCommand> parser) {
         if (!signature.verify(rawBody, signatureHeader)) {
             log.warn("PG webhook signature mismatch");
             callbackLogRepository.save(CallbackLog.signatureRejected(CallbackSource.PG, rawBody, Instant.now(clock)));
             throw new InvalidSignatureException();
         }
-        return processor.process(command, rawBody);
+        return processor.process(parser.apply(rawBody), rawBody);
     }
 }

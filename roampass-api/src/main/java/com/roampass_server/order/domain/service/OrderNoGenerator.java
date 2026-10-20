@@ -2,7 +2,7 @@ package com.roampass_server.order.domain.service;
 
 import java.time.Instant;
 
-import com.roampass_server.order.domain.model.OrderNo;
+import com.roampass_server.common.domain.OrderNo;
 
 /**
  * Port for issuing new order numbers. Tests can supply fixed numbers.

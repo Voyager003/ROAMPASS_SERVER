@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import com.roampass_server.common.domain.IllegalStateTransitionException;
 import com.roampass_server.common.domain.InvalidValueException;
 import com.roampass_server.common.domain.Money;
+import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.common.domain.SimType;
 import com.roampass_server.common.domain.UserId;
 

@@ -9,7 +9,7 @@ import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import com.roampass_server.order.domain.model.OrderNo;
+import com.roampass_server.common.domain.OrderNo;
 
 @DisplayName("RandomOrderNoGenerator")
 class RandomOrderNoGeneratorTest {

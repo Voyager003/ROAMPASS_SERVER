@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 
 import com.roampass_server.common.domain.KoreaTime;
-import com.roampass_server.order.domain.model.OrderNo;
+import com.roampass_server.common.domain.OrderNo;
 
 /**
  * {@code ORD-{KST yyyyMMdd}-{8 random chars}}. The alphabet leaves out 0/O and 1/I so numbers read

@@ -1,4 +1,4 @@
-package com.roampass_server.order.domain.model;
+package com.roampass_server.common.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -9,7 +9,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import com.roampass_server.common.domain.InvalidValueException;
 
 @DisplayName("OrderNo")
 class OrderNoTest {

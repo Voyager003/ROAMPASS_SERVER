@@ -1,11 +1,10 @@
-package com.roampass_server.order.domain.model;
+package com.roampass_server.common.domain;
 
 import java.util.regex.Pattern;
 
-import com.roampass_server.common.domain.InvalidValueException;
-
 /**
  * Externally visible order number shared with the PG, the supplier and the user.
+ * Lives in the shared kernel because it is the correlation key across systems (order, payment, issuance).
  * Format: {@code ORD-{KST yyyyMMdd}-{8 upper-case letters/digits}} — the date helps support,
  * the random part makes other people's order numbers hard to guess.
  */

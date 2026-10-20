@@ -93,7 +93,8 @@ public class AdminOrderQueryService {
                         .toList());
     }
 
-    private AdminOrderSummary summarize(Order order) {
+    /** 목록 한 줄(이상 건 목록도 같은 형식) */
+    public AdminOrderSummary summarize(Order order) {
         List<Payment> payments = paymentRepository.findByOrderNo(order.orderNo());
         Payment latest = payments.stream().max(Comparator.comparing(Payment::requestedAt)).orElse(null);
         SimProfile profile = profileRepository.findByOrderNo(order.orderNo()).orElse(null);

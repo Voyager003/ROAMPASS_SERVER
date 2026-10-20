@@ -28,4 +28,7 @@ public interface CallbackLogRepository {
 
     /** 주문의 통지 기록, 수신 시각 오름차순 */
     List<CallbackLog> findByOrderNo(OrderNo orderNo);
+
+    /** 처리 결과별 최근 기록, 수신 시각 내림차순 최대 {@code limit}건(어드민 이상 건 조회) */
+    List<CallbackLog> findRecentByOutcome(CallbackOutcome outcome, int limit);
 }

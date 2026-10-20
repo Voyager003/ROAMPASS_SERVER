@@ -19,6 +19,8 @@ import com.roampass_server.order.domain.model.PlanSnapshot;
 import com.roampass_server.payment.application.FakePaymentRepository;
 import com.roampass_server.payment.application.FakeRefundAttemptRepository;
 import com.roampass_server.payment.application.RefundOpener;
+import com.roampass_server.payment.application.RefundResultService;
+import com.roampass_server.payment.domain.model.RetryPolicy;
 import com.roampass_server.payment.domain.model.Payment;
 import com.roampass_server.payment.domain.model.PgTid;
 import com.roampass_server.plan.application.FakePlanRepository;
@@ -79,6 +81,17 @@ public class IssuanceFixture {
         Order order = Order.create(orderNo, UserId.of("user-1"), PlanSnapshot.of(3L, SimType.USIM, USIM_PRICE),
                 LocalDate.of(2026, 10, 25), NOW, Duration.ofMinutes(10)).confirmPayment(NOW);
         return orders.save(order);
+    }
+
+    /** 발급 실패 → 자동 환불 3회 실패까지 진행해 NEEDS_ATTENTION 주문을 만듦 */
+    public void needsAttention() {
+        String sup = dispatched();
+        sendCallback(issueFailed("sevt_fail", sup));
+        RefundResultService results = new RefundResultService(refunds, payments, orders, recorder,
+                RetryPolicy.defaults(), clock);
+        for (int i = 0; i < 3; i++) {
+            results.applyFailure(refunds.findByOrderNo(ORDER_NO).getLast(), "PG down");
+        }
     }
 
     /** 발급 완료(프로필 ISSUED)까지 진행, 여행 시작일 2026-10-25·사용 5일 */

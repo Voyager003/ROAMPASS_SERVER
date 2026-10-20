@@ -1,6 +1,7 @@
 package com.roampass_server.order.application;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -56,6 +57,12 @@ public class FakeOrderRepository implements OrderRepository {
                 .toList();
         List<Order> content = matched.stream().skip((long) page * size).limit(size).toList();
         return new PageResult<>(content, page, size, matched.size());
+    }
+
+    @Override
+    public List<Order> findByStatuses(Collection<OrderStatus> statuses, int limit) {
+        return orders.values().stream().filter(o -> statuses.contains(o.status()))
+                .sorted(Comparator.comparing(Order::createdAt)).limit(limit).toList();
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.roampass_server.order.infrastructure.persistence;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -68,6 +69,12 @@ class OrderRepositoryAdapter implements OrderRepository {
                 PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))));
         return new PageResult<>(result.getContent().stream().map(OrderJpaEntity::toDomain).toList(), page, size,
                 result.getTotalElements());
+    }
+
+    @Override
+    public List<Order> findByStatuses(Collection<OrderStatus> statuses, int limit) {
+        return jpaRepository.findByStatusInOrderByCreatedAtAsc(statuses, PageRequest.of(0, limit)).stream()
+                .map(OrderJpaEntity::toDomain).toList();
     }
 
     @Override

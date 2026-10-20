@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -16,6 +17,9 @@ interface CallbackLogJpaRepository extends JpaRepository<CallbackLogJpaEntity, L
     Optional<CallbackLogJpaEntity> findByEventKey(String eventKey);
 
     List<CallbackLogJpaEntity> findByOrderNoOrderByReceivedAtAscIdAsc(String orderNo);
+
+    List<CallbackLogJpaEntity> findByOutcomeOrderByReceivedAtDescIdDesc(CallbackOutcome outcome,
+                                                                         Pageable pageable);
 
     /**
      * event_key가 처음일 때만 INSERT, 이미 있으면 아무것도 하지 않고 0 반환

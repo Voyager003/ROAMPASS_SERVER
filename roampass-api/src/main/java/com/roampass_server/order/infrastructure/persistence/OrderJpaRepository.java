@@ -1,6 +1,7 @@
 package com.roampass_server.order.infrastructure.persistence;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +22,9 @@ interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, Long>, JpaSpe
     // idx_orders_status_expires_at 인덱스 사용
     List<OrderJpaEntity> findByStatusAndExpiresAtLessThanEqualOrderByExpiresAtAsc(OrderStatus status, Instant now,
                                                                                     Pageable pageable);
+
+    List<OrderJpaEntity> findByStatusInOrderByCreatedAtAsc(Collection<OrderStatus> statuses,
+                                                           Pageable pageable);
 
     // 발급 요청 대상(PAID 이심), 오래된 순
     List<OrderJpaEntity> findByStatusAndSimTypeOrderByCreatedAtAsc(OrderStatus status,

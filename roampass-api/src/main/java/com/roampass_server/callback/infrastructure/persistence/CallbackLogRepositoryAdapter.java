@@ -3,6 +3,7 @@ package com.roampass_server.callback.infrastructure.persistence;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +47,13 @@ class CallbackLogRepositoryAdapter implements CallbackLogRepository {
     @Override
     public Optional<CallbackLog> findByEventKey(String eventKey) {
         return jpaRepository.findByEventKey(eventKey).map(CallbackLogJpaEntity::toDomain);
+    }
+
+    @Override
+    public List<CallbackLog> findRecentByOutcome(CallbackOutcome outcome, int limit) {
+        return jpaRepository.findByOutcomeOrderByReceivedAtDescIdDesc(outcome,
+                PageRequest.of(0, limit)).stream()
+                .map(CallbackLogJpaEntity::toDomain).toList();
     }
 
     @Override

@@ -2,6 +2,9 @@ package com.roampass_server;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Clock;
+import java.time.ZoneOffset;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -20,6 +23,9 @@ class RoampassServerApplicationIntegrationTest {
 
     @Autowired
     private MockMvcTester mvc;
+
+    @Autowired
+    private Clock clock;
 
     @Nested
     @DisplayName("test 프로필로 기동하면")
@@ -47,6 +53,13 @@ class RoampassServerApplicationIntegrationTest {
                     .bodyJson()
                     .extractingPath("$.status")
                     .isEqualTo("UP");
+        }
+
+        @Test
+        @DisplayName("현재 시각의 출처인 Clock 빈은 UTC다")
+        void clock_bean_is_utc() {
+            // when & then
+            assertThat(clock.getZone()).isEqualTo(ZoneOffset.UTC);
         }
     }
 }

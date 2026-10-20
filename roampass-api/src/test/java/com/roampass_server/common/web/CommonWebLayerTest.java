@@ -158,13 +158,14 @@ class CommonWebLayerTest {
         }
 
         @Test
-        @DisplayName("없는 경로는 500이 아니라 404로 응답한다")
+        @DisplayName("없는 경로는 500이 아니라 404 NOT_FOUND로 응답한다 (Spring 기본 예외에도 code 부여)")
         void unknown_path_is_still_404() {
             // when
             var result = mvc.get().uri("/api/does-not-exist");
 
             // then
-            assertThat(result).hasStatus(HttpStatus.NOT_FOUND);
+            assertThat(result).hasStatus(HttpStatus.NOT_FOUND)
+                    .bodyJson().extractingPath("$.code").isEqualTo("NOT_FOUND");
         }
     }
 }

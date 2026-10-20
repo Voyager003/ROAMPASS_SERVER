@@ -1,12 +1,16 @@
 package com.roampass_server.common.web;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import com.roampass_server.common.application.exception.NotFoundException;
 import com.roampass_server.common.domain.exception.DomainException;
 import com.roampass_server.common.domain.exception.IllegalStateTransitionException;
 import com.roampass_server.common.domain.exception.InvalidValueException;
@@ -25,6 +29,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(MissingAuthHeaderException.class)
     ResponseEntity<ProblemDetail> handleMissingAuthHeader(MissingAuthHeaderException e) {
         return problem(HttpStatus.UNAUTHORIZED, e.getCode(), e.getMessage());
+    }
+
+    @ExceptionHandler(NotFoundException.class)
+    ResponseEntity<ProblemDetail> handleNotFound(NotFoundException e) {
+        return problem(HttpStatus.NOT_FOUND, e.getCode(), e.getMessage());
     }
 
     @ExceptionHandler(InvalidValueException.class)
@@ -47,6 +56,25 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     ResponseEntity<ProblemDetail> handleUnexpected(Exception e) {
         log.error("Unhandled exception", e);
         return problem(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Internal server error");
+    }
+
+    // Spring MVC 자체 예외(검증 실패, 본문 파싱 실패, 타입 불일치, 404, 405 등)에도 code 부여
+    @Override
+    protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers,
+                                                             HttpStatusCode statusCode, WebRequest request) {
+        ProblemDetail problem = body instanceof ProblemDetail pd ? pd : ProblemDetail.forStatus(statusCode);
+        if (problem.getProperties() == null || !problem.getProperties().containsKey("code")) {
+            problem.setProperty("code", frameworkCode(statusCode));
+        }
+        return super.handleExceptionInternal(ex, problem, headers, statusCode, request);
+    }
+
+    private static String frameworkCode(HttpStatusCode statusCode) {
+        if (statusCode.value() == HttpStatus.BAD_REQUEST.value()) {
+            return "INVALID_REQUEST";
+        }
+        HttpStatus status = HttpStatus.resolve(statusCode.value());
+        return status != null ? status.name() : "HTTP_" + statusCode.value();
     }
 
     private static ResponseEntity<ProblemDetail> problem(HttpStatus status, String code, String detail) {

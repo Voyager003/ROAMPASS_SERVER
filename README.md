@@ -87,7 +87,7 @@ curl -X POST localhost:8080/api/orders/{orderNo}/pay -H 'X-User-Id: user-1'
 
 ### 2.2 결제, 발급, 주문 상태 설계
 
-> 상태와 전이 규칙은 도메인 모델(순수 Java)로 구현되어 단위 테스트로 고정되어 있습니다. 상태를 바꾸는 주체(스케줄러·콜백·API) 중 주문 생성(API), 결제 대기 만료(스케줄러), 결제 확정(승인 응답·PG 웹훅·상태 조회 스케줄러), 이심 발급(발급 스케줄러·공급사 콜백·대기 초과 스케줄러), 자동 환불(환불 스케줄러)은 연결되어 있고, 아직 구현 전인 부분(운영자 조치, 유심 ICCID 등록, 설치 추적)은 _(구현 예정)_ 으로 표시했습니다.
+> 상태와 전이 규칙은 도메인 모델(순수 Java)로 구현되어 단위 테스트로 고정되어 있습니다. 상태를 바꾸는 주체(스케줄러·콜백·API) 중 주문 생성(API), 결제 대기 만료(스케줄러), 결제 확정(승인 응답·PG 웹훅·상태 조회 스케줄러), 이심 발급(발급 스케줄러·공급사 콜백·대기 초과 스케줄러), 자동 환불(환불 스케줄러), 유심 ICCID 등록(API), 설치 추적(공급사 상태 폴링), 운영자 조치(어드민 API)까지 모두 연결되어 있습니다.
 
 **원칙: 주문 상태와 SIM 상태를 나눴습니다.**
 - **주문(`Order`)**: 돈을 받고 SIM을 내주기까지(결제 → 발급 → 환불). 이심이든 유심이든 SIM을 내주면 `ISSUED`로 끝납니다.
@@ -152,7 +152,7 @@ stateDiagram-v2
 | `ISSUE_REQUESTED` (콜백 대기) | 공급사 콜백이 `ISSUED`로. 접수 응답을 못 받았으면 같은 멱등 키로 재전송. 2분 안에 콜백이 없으면 대기 초과 스케줄러가 `ISSUE_FAILED`로 |
 | `ISSUE_FAILED` | 같은 트랜잭션에서 바로 `REFUNDING`으로 넘어가고 환불 요청이 생김(실패 콜백·접수 거절·대기 초과 모두) |
 | `REFUNDING` | 환불 스케줄러(15초 주기)가 PG 취소를 시도해 `REFUNDED`로. 실패하면 1분·2분 뒤 재시도, 3회 모두 실패하면 `NEEDS_ATTENTION` |
-| `NEEDS_ATTENTION` | 운영자가 수동 환불 또는 재발급. 사유가 반드시 이력에 남음 _(운영자 조치 API는 구현 예정)_ |
+| `NEEDS_ATTENTION` | 어드민 이상 건 목록에 나오고, 운영자가 수동 환불(→ `REFUNDING`) 또는 재발급(→ `ISSUE_REQUESTED`). 운영자 ID와 사유가 반드시 이력에 남고, 두 운영자가 동시에 눌러도 조건부 UPDATE로 한 번만 실행 |
 
 어느 경우에도 "결제됐는데 아무 흔적 없이 멈춘 주문"이 남지 않도록, 모든 중간 상태에 그 상태를 끝낼 주체를 정해 두었습니다.
 
@@ -298,7 +298,34 @@ stateDiagram-v2
 
 ### 2.5 "이 사용자가 SIM을 설치했다"를 무엇으로 판단
 
+**공급사가 알려 주는 프로필 상태만 설치·개통의 근거로 씁니다.** 우리 서버가 직접 아는 신호는 QR 열람뿐이고, 그것은 설치가 아닙니다.
+
+| 신호 | 출처(이력 주체) | 얼마나 믿는가 | 반영 |
+|---|---|---|---|
+| QR 열람 | 우리 API `POST /api/sims/{orderNo}/qr-viewed` (USER) | 화면을 열었다는 사실만. 설치 여부는 모름 | `QR_VIEWED`. **환불 가능 판정에 영향 없음** |
+| `INSTALLED` | 공급사 상태 조회 (SUPPLIER) | 설치의 근거 | `INSTALLED`, 설치 시각 기록 → 환불 불가 |
+| `ENABLED` + `activatedAt` | 공급사 상태 조회 (SUPPLIER) | 개통의 근거, 개통 시각은 공급사 값(UTC) 그대로 | `ACTIVE`. 만료 = 개통 + 24시간 × 사용 일수(표시는 KST) |
+| `DELETED` | 공급사 상태 조회 (SUPPLIER) | 기기에서 지움 | 상태는 그대로, 삭제 시각만 기록. 설치했다 지운 SIM도 여전히 환불 불가 |
+
+- **앞으로만 진행**: 늦게 온 이전 단계 신호·중복 신호는 무시하고, 단계를 건너뛴 신호(설치 없이 개통)는 받아들여 빈 시각을 채웁니다. 신호 순서가 바뀌는 것을 정상 상황으로 봅니다.
+- **콜백이 빠지거나 늦을 때**: 부록 A 계약상 공급사는 설치·개통을 콜백으로 알려 주지 않으므로 **상태 조회(폴링)가 유일한 경로**이고, 신호가 늦게 반영되는 것은 다음 주기에 다시 조회해 메웁니다. 유심 개통 응답이 유실된 경우도 같은 폴링이 메웁니다(테스트로 검증). 발급 콜백 누락은 2분 대기 후 실패·자동 환불로 처리합니다(2.2).
+- **얼마나 자주, 어떤 SIM만**: 1분마다, **개통 전이고 삭제되지 않았으며 여행 시작일 3일 전부터 시작일 + 사용 일수까지 창 안에 있는 SIM만** 조회합니다. 여행이 먼 SIM은 아직 설치할 이유가 적고, 개통된 SIM은 만료가 시간만으로 정해지므로(조회 시점에 `EXPIRED` 판정) 다시 묻지 않습니다. 모든 활성 SIM을 매분 조회하지 않는 이유입니다.
+- **환불 판정 직전에는 다시 조회**: 운영자 수동 환불은 판정 직전에 공급사 상태를 한 번 더 조회해 반영한 뒤 "설치·개통된 SIM은 환불 불가"를 판정합니다. 폴링 주기 사이에 설치된 경우도 놓치지 않기 위해서입니다.
+
+**만료일 검증** (`e2e/SimExpiryE2ETest`): 부록 A 예시 그대로 7일 요금제를 주문·결제·발급한 뒤, 공급사가 `ENABLED`·`2026-05-01T15:20:00Z`를 돌려주면 폴링이 `ACTIVE`로 반영하고 만료는 `2026-05-08T15:20:00Z` = **KST 2026-05-09 00:20**, 만료 1초 전은 `ACTIVE`, 만료 시각부터 `EXPIRED`입니다.
+
+**신호가 틀렸을 때**
+- **운영자**: 어드민 주문 상세의 타임라인에 언제·어떤 신호로(`SUPPLIER`, 사유 "공급사 상태 조회: ENABLED") 상태가 바뀌었는지와 프로필의 설치·개통·삭제 시각이 남아, 판단 근거를 그대로 볼 수 있습니다. 공급사가 잘못 `ENABLED`를 주면 수동 환불은 `SIM_NOT_REFUNDABLE`로 막힙니다. 이를 사람이 덮어쓰는 기능은 없습니다(미구현 참고).
+- **사용자**: 내 SIM 화면에서 설치 상태와 환불 가능 여부를 봅니다 _(사용자 화면 API는 다음 단계에서 구현 예정)_.
+
 ### 2.6 어드민과 사용자 화면에서 서버와 클라이언트의 경계
+
+**어드민 쪽**
+- 상태 판정·조치 가능 여부·동시 클릭 방지는 모두 서버가 합니다. 화면은 서버가 준 상태를 그대로 보여 주고, 조치 버튼은 서버의 409(`ORDER_NOT_REFUNDABLE`, `SIM_NOT_REFUNDABLE`, `ACTION_CONFLICT` 등)를 그대로 안내하면 됩니다.
+- **몇 초 전 데이터인가**: 어드민 응답은 모두 `{asOf, data}` 형식이고 `asOf`는 서버가 DB를 조회한 시각(UTC)입니다. 화면은 "asOf 기준 N초 전"으로 표시합니다. 다만 DB의 결제·설치 상태 자체도 외부 신호가 반영된 시점의 값이라, 결제는 웹훅(보통 즉시)·상태 조회(최대 약 1분 30초), 설치는 폴링(최대 약 1분)만큼 늦을 수 있습니다.
+- 운영자는 저장된 상태를 그대로 봅니다(조회 시점 판정 없음). 예를 들어 만료 스케줄러가 아직 돌지 않은 주문은 `PENDING`으로 보이는데, 시스템이 실제로 기록한 상태와 화면이 다르지 않게 하기 위해서입니다.
+
+**사용자 쪽** _(사용자 화면 API는 다음 단계에서 구현 예정)_
 
 ### 2.7 이번 과제에서 처음 써본 것
 
@@ -376,7 +403,43 @@ curl -X POST localhost:8082/mock/supplier/config/reset
 
 콜백 서명 비밀키는 두 앱이 같은 환경변수 `SUPPLIER_CALLBACK_SECRET`을 씁니다(로컬은 같은 기본값).
 
-설치·개통 흉내(시연용): `POST localhost:8082/mock/supplier/profiles/{iccid}/state` `{"state":"INSTALLED"}` 또는 `{"state":"ENABLED"}`. roampass-api가 이 상태를 읽어 반영하는 부분은 설치 추적 단계에서 연결합니다 _(구현 예정)_.
+### 설치·개통 흉내
+폴링은 여행 시작일 3일 전부터 사용 기간 끝까지의 SIM만 조회하므로, 시연용 주문은 `travelStartDate`를 오늘~3일 뒤로 만듭니다.
+
+```bash
+# 1) 발급된 이심의 ICCID 확인 (어드민 상세의 profile.iccid)
+curl localhost:8080/admin/orders/{orderNo} -H 'X-Admin-Id: admin-1'
+
+# 2) 공급사 쪽 상태를 설치 → 개통으로 바꿈 (ENABLED가 되는 순간이 개통 시각)
+curl -X POST localhost:8082/mock/supplier/profiles/{iccid}/state -H 'Content-Type: application/json' -d '{"state":"INSTALLED"}'
+curl -X POST localhost:8082/mock/supplier/profiles/{iccid}/state -H 'Content-Type: application/json' -d '{"state":"ENABLED"}'
+
+# 3) 1분 안에 폴링이 반영 → 어드민 상세에서 profile.status = ACTIVE, expiresAtKst 확인
+#    이후 수동 환불을 시도하면 409 SIM_NOT_REFUNDABLE
+```
+
+### 유심 ICCID 등록
+```bash
+# 유심 요금제(예: planId 3) 주문 → 결제 → PICKUP_READY 뒤
+curl -X POST localhost:8080/api/orders/{orderNo}/usim/register -H 'X-User-Id: user-1' \
+  -H 'Content-Type: application/json' -d '{"iccid":"8982300912345678902"}'
+# → {"installStatus":"ACTIVE"} (mock-supplier가 바로 개통)
+# 체크 디지트가 틀린 ICCID(예: ...8903) → 400 INVALID_ICCID, 이미 등록된 ICCID → 409 ICCID_ALREADY_REGISTERED
+```
+
+### 어드민
+```bash
+curl 'localhost:8080/admin/orders?status=NEEDS_ATTENTION&simType=ESIM&page=0&size=20' -H 'X-Admin-Id: admin-1'
+curl localhost:8080/admin/orders/{orderNo} -H 'X-Admin-Id: admin-1'     # 타임라인·결제·프로필·환불·콜백
+curl localhost:8080/admin/issues -H 'X-Admin-Id: admin-1'               # 결제 후 5분 미발급·NEEDS_ATTENTION·금액 불일치·서명 실패
+
+# 운영자 조치 (사유 필수, 동시에 눌러도 한 번만)
+curl -X POST localhost:8080/admin/orders/{orderNo}/refund -H 'X-Admin-Id: admin-1' \
+  -H 'Content-Type: application/json' -d '{"reason":"자동 환불 실패 건 수동 처리"}'
+curl -X POST localhost:8080/admin/orders/{orderNo}/reissue -H 'X-Admin-Id: admin-1' \
+  -H 'Content-Type: application/json' -d '{"reason":"공급사 장애 복구 후 재발급"}'
+```
+`NEEDS_ATTENTION` 주문은 "발급 실패율 100%"(공급사) + "취소 실패율 100%"(PG)를 켜고 결제하면 몇 분 안에 만들어집니다(환불 3회 실패: 즉시·1분·2분 뒤).
 
 ---
 
@@ -405,7 +468,8 @@ com.roampass_server
 │   ├── web/          # 에러 응답(ProblemDetail + code), 식별 헤더 처리
 │   └── config/       # Clock 빈, 스케줄러 on/off
 ├── callback/         # 외부 통지 수신 기록(중복 판정·서명 검증), PG 웹훅·공급사 콜백 공용
-└── {도메인}/      # plan, order, payment, issuance, admin, history (단계별로 추가)
+├── admin/            # 어드민 조회·이상 건·운영자 조치(여러 도메인 저장소를 읽어 조합, 자체 도메인 모델 없음)
+└── {도메인}/      # plan, order, payment, issuance, history
     ├── api/             # 컨트롤러, 요청·응답 DTO
     ├── application/     # 유스케이스, 트랜잭션 경계
     ├── domain/          # 순수 Java 모델 · 리포지토리 인터페이스
@@ -491,6 +555,7 @@ erDiagram
         BIGSERIAL id PK
         VARCHAR source
         VARCHAR event_key UK
+        VARCHAR order_no
         BOOLEAN signature_ok
         TEXT payload
         VARCHAR outcome
@@ -551,6 +616,7 @@ erDiagram
 | `issuance_request(status, requested_at)` | 접수 재전송 대상(`PENDING`)·콜백 대기 초과 대상 |
 | `sim_profile(order_no)`·`(iccid)`·`(supplier_order_no)` UNIQUE | 한 주문에 프로필 1개(중복 콜백의 최후 방어) |
 | `refund_attempt(status, next_retry_at)` | 환불 스케줄러: 시도 시각이 된 `PENDING` |
+| `callback_log(order_no)` | 어드민 주문 상세의 콜백 기록 |
 
 - 상태·종류는 enum 이름 문자열, 시각은 `TIMESTAMPTZ`(UTC), 금액은 통화 최소 단위 `BIGINT` + 통화 코드입니다.
 - 요금제 시드는 16개(일본·미국·베트남·태국 × 이심·유심 × 2종)이며, 유심은 같은 구성의 이심보다 2,000원 비쌉니다.
@@ -559,10 +625,14 @@ erDiagram
 
 ## 미구현 · 타협한 부분과 이유
 
-- **PG에서 다른 금액으로 승인된 결제**: 확정하지 않고 `REQUESTED`로 남기며, 상태 조회 때마다 ERROR 로그를 남깁니다. 그동안 그 주문은 새 결제도 막힙니다. 운영자 확인 대상으로 넘기는 처리는 어드민 단계에서 연결합니다.
+- **PG에서 다른 금액으로 승인된 결제**: 확정하지 않고 `REQUESTED`로 남깁니다. 웹훅으로 온 경우는 어드민 이상 건("금액 불일치 통지")에 나오지만, 승인 응답·상태 조회 경로에서 발견한 경우는 ERROR 로그만 남고 이상 건 목록에는 나오지 않습니다. 그동안 그 주문은 새 결제도 막힙니다.
 - **웹훅 동기 처리**: 받은 요청 안에서 처리합니다. 처리량이 커지면 수신 기록만 남기고 큐로 넘기는 구조가 맞지만, 이 규모에서는 단순한 쪽을 택했습니다.
 - **mock-pg 웹훅 재시도 없음**: 실제 PG처럼 실패 시 재전송하지는 않습니다. 중복 수신은 장애 주입의 `webhookDuplicates`로 재현합니다.
-- **공급사 쪽 프로필 회수 없음**: 실패 처리 뒤 늦게 성공 콜백이 오면 이상 건으로 기록만 하고, 공급사에 발급 취소를 요청하지는 않습니다(부록 A 계약에 취소 API가 없음).
+- **공급사 쪽 프로필 회수 없음**: 실패 처리 뒤 늦게 성공 콜백이 오거나, 발급된(미설치) SIM을 수동 환불해도 공급사에 프로필 회수를 요청하지 않습니다(부록 A 계약에 회수 API가 없음).
+- **개통 후 삭제는 추적하지 않음**: 폴링 대상이 개통 전 SIM뿐이라, 개통한 뒤 기기에서 지운 것은 반영되지 않습니다. 설치·개통 여부와 환불 불가 판정은 개통 시점에 이미 정해져 결과가 달라지지 않습니다.
+- **공급사 신호 정정 기능 없음**: 공급사가 잘못된 상태를 줘도 설치 상태는 앞으로만 진행해서, 운영자가 되돌리거나 덮어쓸 수 없습니다.
+- **어드민 목록**: 주문 행마다 결제·프로필을 추가 조회합니다(N+1, 페이지 최대 50건). 필터는 주문 상태·SIM 종류·생성 기간만이고, 결제 상태·설치 상태로는 거를 수 없습니다(주문 상태가 결제·발급 단계를 대신 표현).
+- **수동 환불은 전액만**: 부분 취소는 도메인·mock-pg에 있지만 운영자 API로는 열지 않았습니다.
 - **mock-supplier "순서 뒤바뀜" 장애 주입 없음**: 발급 결과가 주문당 1종류라 결과끼리 순서가 바뀔 대상이 없습니다. 실제로 생길 수 있는 "접수 응답보다 콜백이 먼저"는 단위 테스트(`IssuanceCallbackServiceTest`)로 검증했습니다(2.3).
 - **PG 웹훅 서명 검증은 과제 요구 밖**: 과제는 공급사 콜백의 서명 검증만 요구합니다. 위조 통지로 결제가 확정되는 것을 막기 위해 PG 웹훅에도 HMAC-SHA256 서명을 적용했습니다.
 

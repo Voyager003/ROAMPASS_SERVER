@@ -1,0 +1,5 @@
+# Test profile. The datasource is provided by Testcontainers through @ServiceConnection
+# (see support/TestcontainersConfiguration), so no connection settings are needed here.
+spring:
+  jpa:
+    show-sql: false

@@ -22,3 +22,6 @@
 | 15 | 2026-10-20 | Phase마다 브랜치 `phase/p{N}-{이름}`, 완료 시 `--no-ff` 머지 | `main` 직접 커밋, PR | 과제가 커밋으로 "어떤 순서로 문제를 풀었는지"를 봄(2.5-⑥). 머지 커밋이 Phase 경계를 드러냄 |
 | 16 | 2026-10-20 | 1차 배포를 발급 Phase(P3) 직후에 수행 | 모든 기능 완성 후 한 번에 배포 | 접속 URL은 없으면 평가 불가인 제출물이고, 처음 해 보는 작업(인스턴스 2대·사설 IP·amd64 빌드)이 가장 많음. 리스크를 앞당김 |
 | 17 | 2026-10-20 | P0의 compose는 PostgreSQL만, 앱 3개는 `bootRun`으로 실행. 앱의 compose 편입은 P4 | P0부터 앱 3개를 compose로 | 앱을 compose로 띄우려면 Dockerfile이 필요하고 이는 배포 Phase의 작업 |
+| 18 | 2026-10-20 | 로컬 DB 접속 정보는 `.env`(compose용)와 `application-local.yml`(앱용)에 두고 둘 다 gitignore, `.example` 파일만 커밋 | compose.yaml·application.yml에 로컬 계정 직접 기입 | 로컬 전용 값이라도 비밀번호가 저장소에 들어가지 않게 함(2.7 감점 항목 "시크릿 커밋"). 대가: 두 파일의 값을 맞춰야 함 |
+| 19 | 2026-10-20 | `spring-boot-docker-compose`(bootRun 시 compose 자동 기동) 의존성 제거, compose는 `docker compose up -d`로 직접 실행 | 유지(compose에서 접속 정보 자동 주입) | 접속 정보의 출처를 `application-local.yml` 하나로 고정해 "어디서 값이 오는지"가 명확하게. README 실행 방법도 명령어 그대로 재현 가능 |
+| 20 | 2026-10-20 | 통합 테스트는 `@IntegrationTest`(SpringBootTest + test 프로필 + Testcontainers 설정) 하나로 묶고, PostgreSQL 컨테이너는 `@ServiceConnection` 빈으로 제공 | 테스트마다 `@Container` 정적 필드 | 모든 통합 테스트가 같은 설정을 쓰면 Spring 컨텍스트 캐시로 컨테이너가 사실상 한 번만 뜸. 접속 정보를 테스트에 적을 필요 없음 |

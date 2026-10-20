@@ -1,0 +1,18 @@
+# Shared configuration. Non-sensitive values only — this file is committed.
+# Sensitive values live in application-local.yml (gitignored) or environment variables (prod).
+spring:
+  application:
+    name: roampass-api
+  profiles:
+    default: local
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate   # schema is owned by Flyway; Hibernate only validates it
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC   # store and read timestamps in UTC; convert to KST only when calculating/displaying
+  flyway:
+    enabled: true
+    locations: classpath:db/migration

@@ -262,4 +262,34 @@ class PaymentTest {
         assertThat(approved()).isEqualTo(requested());
         assertThat(Payment.request(ORDER_NO, 2, AMOUNT, NOW)).isNotEqualTo(requested());
     }
+
+    @Nested
+    @DisplayName("저장소에서 복원하면")
+    class WhenRestored {
+
+        @Test
+        @DisplayName("모든 값을 그대로 가진다")
+        void keeps_all_values() {
+            // when
+            Payment payment = Payment.restore(5L, ORDER_NO, IdempotencyKey.of(ORDER_NO, 2), AMOUNT,
+                    PaymentStatus.PARTIALLY_CANCELLED, TID, Money.krw(2_000), null, NOW, NOW.plusSeconds(3));
+
+            // then
+            assertThat(payment.id()).isEqualTo(5L);
+            assertThat(payment.idempotencyKey().value()).isEqualTo("ORD-20261020-7K3Q9XPA-2");
+            assertThat(payment.status()).isEqualTo(PaymentStatus.PARTIALLY_CANCELLED);
+            assertThat(payment.cancelledAmount()).isEqualTo(Money.krw(2_000));
+            assertThat(payment.cancelableAmount()).isEqualTo(Money.krw(10_000));
+            assertThat(payment.approvedAt()).isEqualTo(NOW.plusSeconds(3));
+        }
+
+        @Test
+        @DisplayName("필수값이 없으면 거부된다")
+        void rejects_missing_required_values() {
+            // when // then
+            assertThatThrownBy(() -> Payment.restore(5L, ORDER_NO, IdempotencyKey.of(ORDER_NO, 1), AMOUNT, null,
+                    null, Money.krw(0), null, NOW, null))
+                    .isInstanceOf(InvalidValueException.class);
+        }
+    }
 }

@@ -27,3 +27,13 @@ roampass:
     expiration:
       batch-size: 100          # 만료 스케줄러 1회 최대 처리 건수
       fixed-delay: PT30S       # 만료 스케줄러 실행 간격(ISO-8601, 이전 실행 종료 기준)
+  pg:
+    base-url: ${PG_BASE_URL:http://localhost:8081}   # mock-pg 주소
+    connect-timeout: 2s
+    read-timeout: 5s           # 넘으면 결과 UNKNOWN, 결제는 REQUESTED로 남고 웹훅·상태 조회로 확정
+    # 로컬 개발용 기본값. 배포 환경은 PG_WEBHOOK_SECRET 환경변수로 교체(mock-pg와 같은 값)
+    webhook-secret: ${PG_WEBHOOK_SECRET:local-dev-webhook-secret}
+    reconciliation:
+      stale-after: 1m          # 요청 후 1분 지난 REQUESTED만 PG에 조회(읽기 타임아웃 5초보다 길게)
+      batch-size: 50           # 1회 최대 조회 건수
+      fixed-delay: PT30S       # 실행 간격(ISO-8601, 이전 실행 종료 기준)

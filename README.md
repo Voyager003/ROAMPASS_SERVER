@@ -46,6 +46,20 @@ DB 스키마와 시드 데이터는 `roampass-api` 기동 시 Flyway가 자동�
 - 사용자 API(`/api/**`): `X-User-Id: user-1`
 - 어드민 API(`/admin/**`): `X-Admin-Id: admin-1`
 
+```bash
+# 요금제 목록 (헤더 불필요, 조건은 모두 선택·정확히 일치)
+curl 'localhost:8080/api/plans?country=JP&simType=ESIM'
+
+# 주문 생성 → 201 + Location, 10분 안에 결제하지 않으면 EXPIRED
+curl -i -X POST localhost:8080/api/orders -H 'X-User-Id: user-1' \
+  -H 'Content-Type: application/json' -d '{"planId": 1, "travelStartDate": "2026-10-25"}'
+
+# 주문 조회 (남의 주문은 404)
+curl localhost:8080/api/orders/{orderNo} -H 'X-User-Id: user-1'
+```
+- 응답 시각은 UTC ISO-8601(`...Z`)입니다. 에러는 RFC 9457 `ProblemDetail`에 `code`(예: `ORDER_NOT_FOUND`, `INVALID_REQUEST`)가 붙습니다.
+- `travelStartDate`는 KST 기준 오늘부터 1년 이내여야 합니다.
+
 ---
 
 ## 2. 질문에 대한 답
@@ -70,7 +84,7 @@ DB 스키마와 시드 데이터는 `roampass-api` 기동 시 Flyway가 자동�
 
 ### 2.2 결제, 발급, 주문 상태 설계
 
-> 상태와 전이 규칙은 도메인 모델(순수 Java)로 구현되어 단위 테스트로 고정되어 있습니다. 상태를 바꾸는 주체(스케줄러·콜백·API)는 이후 단계에서 연결하며, 아직 구현 전인 부분은 _(구현 예정)_ 으로 표시했습니다.
+> 상태와 전이 규칙은 도메인 모델(순수 Java)로 구현되어 단위 테스트로 고정되어 있습니다. 상태를 바꾸는 주체(스케줄러·콜백·API) 중 주문 생성(API)과 결제 대기 만료(스케줄러)는 연결되어 있고, 아직 구현 전인 부분은 _(구현 예정)_ 으로 표시했습니다.
 
 **원칙: 주문 상태와 SIM 상태를 나눴습니다.**
 - **주문(`Order`)**: 돈을 받고 SIM을 내주기까지(결제 → 발급 → 환불). 이심이든 유심이든 SIM을 내주면 `ISSUED`로 끝납니다.
@@ -120,6 +134,7 @@ stateDiagram-v2
 **설계에서 고민한 지점**
 - **만료 직전 결제, 만료 뒤 승인 도착**: 만료된 주문은 되살리지 않고 `EXPIRED → REFUNDING`으로 돈을 돌려줍니다. 만료 판정은 승인이 도착한 시각과 만료 시각을 비교하므로, 만료 스케줄러가 언제 돌았는지와 관계없이 결과가 같습니다.
 - **스케줄러가 돌기 전의 만료**: 만료 시각이 지난 `PENDING` 주문은 조회와 결제 요청에서 이미 `EXPIRED`로 취급합니다. 스케줄러 주기만큼 생기는 공백이 없습니다.
+- **만료 스케줄러**: 30초마다(이전 실행 종료 기준) 만료 시각이 지난 `PENDING` 주문을 최대 100건씩 `EXPIRED`로 저장하고 이력(`SYSTEM`)을 남깁니다. 저장은 `WHERE status = 'PENDING'` 조건부 UPDATE라서, 같은 순간 결제 확정이 먼저 상태를 바꿨다면 그 주문은 건너뜁니다. 실패하면 로그를 남기고 다음 주기에 다시 시도합니다.
 - **결제 실패 후 재시도**: 승인이 실패해도 주문은 `PENDING`으로 남고, 만료 전까지 다시 결제할 수 있습니다. 결제는 시도마다 1건이고, 주문당 승인된 결제는 최대 1건입니다.
 - **환불을 별도 상태로**: PG 취소는 타임아웃·5xx로 실패할 수 있습니다. 재시도하는 동안 주문이 `ISSUED`나 `ISSUE_FAILED`로 보이면 잘못 읽히므로 `REFUNDING`을 두었습니다. 재시도는 최대 3회(1분 → 2분 → 4분)이고, 넘으면 `NEEDS_ATTENTION`으로 운영자에게 넘깁니다.
 - **재발급 제한**: 운영자 재발급은 한 번도 발급된 적 없는 이심 주문만 가능합니다. 한 주문에 프로필이 두 번 붙지 않게 하기 위해서입니다.
@@ -220,9 +235,11 @@ _(배포한 곳과 고른 이유, 콜백 주소를 잡은 방법, 배포하며 �
 ```
 com.roampass_server
 ├── common/
-│   ├── domain/   # 순수 Java 공유 커널: 도메인 예외, UserId·AdminId, Money, KoreaTime
-│   ├── web/      # 에러 응답(ProblemDetail), 식별 헤더 처리
-│   └── config/   # Clock 빈
+│   ├── domain/       # 순수 Java 공유 커널: Money, OrderNo, UserId·AdminId, Actor, KoreaTime, 도메인 예외
+│   ├── application/  # NotFoundException(조회 결과 없음 → 404)
+│   ├── api/          # 공용 응답 DTO(MoneyResponse)
+│   ├── web/          # 에러 응답(ProblemDetail + code), 식별 헤더 처리
+│   └── config/       # Clock 빈, 스케줄러 on/off
 └── {도메인}/      # plan, order, payment, issuance, admin, history (단계별로 추가)
     ├── api/             # 컨트롤러, 요청·응답 DTO
     ├── application/     # 유스케이스, 트랜잭션 경계
@@ -246,7 +263,57 @@ com.roampass_server
 
 - 데이터 용량은 요금제 전체 기간의 총량(MB)으로 가정했습니다. 과제에는 하루 기준인지 총량인지 나와 있지 않습니다.
 
-_(ERD는 영속성 계층을 만드는 단계에서 추가)_
+### 데이터 모델 (현재 스키마)
+스키마는 Flyway(`db/migration`)가 관리하고, Hibernate는 `ddl-auto: validate`로 검증만 합니다. 결제·발급 테이블은 해당 단계에서 추가합니다.
+
+```mermaid
+erDiagram
+    plan ||--o{ orders : "plan_id"
+    orders ||--o{ status_history : "order_no"
+    plan {
+        BIGSERIAL id PK
+        VARCHAR country_code
+        INT days
+        INT data_mb
+        VARCHAR sim_type
+        BIGINT price_amount
+        VARCHAR price_currency
+    }
+    orders {
+        BIGSERIAL id PK
+        VARCHAR order_no UK
+        VARCHAR user_id
+        BIGINT plan_id FK
+        VARCHAR sim_type
+        BIGINT amount
+        VARCHAR currency
+        DATE travel_start_date
+        VARCHAR status
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ expires_at
+        TIMESTAMPTZ issued_at
+    }
+    status_history {
+        BIGSERIAL id PK
+        VARCHAR order_no FK
+        VARCHAR target_type
+        VARCHAR target_key
+        VARCHAR from_status
+        VARCHAR to_status
+        VARCHAR actor
+        VARCHAR reason
+        TIMESTAMPTZ occurred_at
+    }
+```
+
+| 인덱스 | 쓰는 곳 |
+|---|---|
+| `orders(status, expires_at)` | 만료 스케줄러: `PENDING`이면서 만료 시각이 지난 주문 |
+| `orders(user_id, created_at)` | 내 주문 목록 |
+| `status_history(order_no, occurred_at, id)` | 어드민 주문 타임라인 |
+
+- 상태·종류는 enum 이름 문자열, 시각은 `TIMESTAMPTZ`(UTC), 금액은 통화 최소 단위 `BIGINT` + 통화 코드입니다.
+- 요금제 시드는 16개(일본·미국·베트남·태국 × 이심·유심 × 2종)이며, 유심은 같은 구성의 이심보다 2,000원 비쌉니다.
 
 ---
 

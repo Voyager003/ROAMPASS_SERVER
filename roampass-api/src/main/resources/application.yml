@@ -18,3 +18,12 @@ spring:
     locations: classpath:db/migration
 server:
   port: 8080
+
+roampass:
+  scheduling:
+    enabled: true              # 스케줄러 전체 on/off
+  order:
+    payment-window: 10m        # 주문 생성 후 결제 대기 시간
+    expiration:
+      batch-size: 100          # 만료 스케줄러 1회 최대 처리 건수
+      fixed-delay: PT30S       # 만료 스케줄러 실행 간격(ISO-8601, 이전 실행 종료 기준)

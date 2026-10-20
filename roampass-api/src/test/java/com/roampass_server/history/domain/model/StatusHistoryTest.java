@@ -72,6 +72,25 @@ class StatusHistoryTest {
     }
 
     @Nested
+    @DisplayName("저장된 값으로 복원하면")
+    class Restore {
+
+        @Test
+        @DisplayName("모든 값을 그대로 가진다")
+        void keeps_all_values() {
+            // when
+            StatusHistory history = StatusHistory.restore(3L, ORDER_NO, ORDER, "PENDING", "EXPIRED", Actor.system(),
+                    "결제 대기 만료", NOW);
+
+            // then
+            assertThat(history.id()).isEqualTo(3L);
+            assertThat(history.fromStatus()).isEqualTo("PENDING");
+            assertThat(history.toStatus()).isEqualTo("EXPIRED");
+            assertThat(history.reason()).isEqualTo("결제 대기 만료");
+        }
+    }
+
+    @Nested
     @DisplayName("운영자 조치는")
     class AdminAction {
 

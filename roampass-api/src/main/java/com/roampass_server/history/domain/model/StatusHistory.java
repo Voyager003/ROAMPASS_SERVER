@@ -57,6 +57,12 @@ public final class StatusHistory {
                 truncate(reason), occurredAt);
     }
 
+    /** 저장된 값으로 이력 복원. 기록 시 검증을 통과한 값이므로 다시 검사하지 않음 */
+    public static StatusHistory restore(Long id, OrderNo orderNo, HistoryTarget target, String fromStatus,
+                                        String toStatus, Actor actor, String reason, Instant occurredAt) {
+        return new StatusHistory(id, orderNo, target, fromStatus, toStatus, actor, reason, occurredAt);
+    }
+
     private static String truncate(String reason) {
         if (reason == null) {
             return null;

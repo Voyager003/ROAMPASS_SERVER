@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.roampass_server.common.domain.OrderNo;
+import com.roampass_server.common.domain.SimType;
 import com.roampass_server.order.domain.model.Order;
 import com.roampass_server.order.domain.model.OrderStatus;
 import com.roampass_server.order.domain.repository.OrderRepository;
@@ -38,6 +39,15 @@ public class FakeOrderRepository implements OrderRepository {
         return orders.values().stream()
                 .filter(o -> o.status() == OrderStatus.PENDING && !now.isBefore(o.expiresAt()))
                 .sorted(Comparator.comparing(Order::expiresAt))
+                .limit(limit)
+                .toList();
+    }
+
+    @Override
+    public List<Order> findIssuable(int limit) {
+        return orders.values().stream()
+                .filter(o -> o.status() == OrderStatus.PAID && o.simType() == SimType.ESIM)
+                .sorted(Comparator.comparing(Order::createdAt))
                 .limit(limit)
                 .toList();
     }

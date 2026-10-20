@@ -300,4 +300,24 @@ class SimProfileTest {
         // when & then
         assertThat(esim().markActivated(NOW.plusSeconds(60))).isEqualTo(esim());
     }
+
+    @Nested
+    @DisplayName("저장소에서 복원하면")
+    class WhenRestored {
+
+        @Test
+        @DisplayName("모든 값을 그대로 가진다")
+        void keeps_all_values() {
+            // when
+            SimProfile profile = SimProfile.restore(3L, ORDER_NO, SimType.ESIM,
+                    ICCID, CODE, SUPPLIER_ORDER_NO, 7, InstallStatus.ACTIVE, NOW, null, NOW.plusSeconds(60),
+                    NOW.plusSeconds(120), null);
+
+            // then
+            assertThat(profile.id()).isEqualTo(3L);
+            assertThat(profile.status()).isEqualTo(InstallStatus.ACTIVE);
+            assertThat(profile.usageDays()).isEqualTo(7);
+            assertThat(profile.activatedAt()).isEqualTo(NOW.plusSeconds(120));
+        }
+    }
 }

@@ -26,6 +26,8 @@ import com.roampass_server.payment.domain.model.PgTid;
 import com.roampass_server.payment.domain.service.PgApproveRequest;
 import com.roampass_server.payment.domain.service.PgApproveResult;
 import com.roampass_server.payment.domain.service.PgApproveResult.Outcome;
+import com.roampass_server.payment.domain.service.PgCancelRequest;
+import com.roampass_server.payment.domain.service.PgCancelResult;
 import com.roampass_server.payment.domain.service.PgInquiryResult;
 
 @DisplayName("PG HTTP 어댑터")
@@ -152,5 +154,23 @@ class HttpPgClientTest {
 
         // when // then
         assertThat(client.inquire(REQUEST.idempotencyKey()).status()).isEqualTo(PgInquiryResult.Status.UNKNOWN);
+    }
+
+    @Test
+    @DisplayName("취소: 거래 ID·취소 키·금액을 보내고 2xx면 CANCELLED, 5xx면 UNKNOWN")
+    void cancel() {
+        // given
+        PgCancelRequest request = new PgCancelRequest(PgTid.of("pg_abc"), "refund-1", Money.krw(9_900));
+        server.expect(requestTo("http://pg.test/mock/pg/cancel"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("""
+                        {"pgTid":"pg_abc","cancelKey":"refund-1","amount":9900}
+                        """))
+                .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://pg.test/mock/pg/cancel")).andRespond(withServerError());
+
+        // when // then
+        assertThat(client.cancel(request).outcome()).isEqualTo(PgCancelResult.Outcome.CANCELLED);
+        assertThat(client.cancel(request).outcome()).isEqualTo(PgCancelResult.Outcome.UNKNOWN);
     }
 }

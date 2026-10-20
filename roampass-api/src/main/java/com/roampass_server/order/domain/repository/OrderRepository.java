@@ -21,6 +21,9 @@ public interface OrderRepository {
     /** PENDING이면서 만료 시각이 {@code now} 이전인 주문, 만료 시각 오름차순 최대 {@code limit}건 */
     List<Order> findExpirable(Instant now, int limit);
 
+    /** 발급 요청 대상: PAID 상태의 이심 주문, 오래된 순 최대 {@code limit}건 */
+    List<Order> findIssuable(int limit);
+
     /**
      * 저장된 상태가 아직 {@code expected}일 때만 주문의 변경을 저장(조건부 UPDATE)
      *

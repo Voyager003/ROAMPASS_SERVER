@@ -12,4 +12,7 @@ public interface PgClient {
 
     /** 멱등 키로 PG의 결제 상태 조회, 응답을 못 받은 승인 요청의 결과 확정용 */
     PgInquiryResult inquire(IdempotencyKey key);
+
+    /** 승인된 결제 취소(전액/부분), 환불 실행용 */
+    PgCancelResult cancel(PgCancelRequest request);
 }

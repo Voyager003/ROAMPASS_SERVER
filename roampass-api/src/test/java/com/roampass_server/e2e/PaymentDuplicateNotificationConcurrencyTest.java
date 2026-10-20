@@ -1,5 +1,6 @@
 package com.roampass_server.e2e;
 
+import static com.roampass_server.support.ConcurrentRunner.runConcurrently;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
@@ -8,11 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -102,32 +98,6 @@ class PaymentDuplicateNotificationConcurrencyTest {
         PaymentWebhookCommand command = new PaymentWebhookCommand(eventId, "PAYMENT_APPROVED",
                 payment.idempotencyKey().value(), "pg_concurrency", payment.amount().amount(), "KRW");
         return webhookService.receive(body, signature, raw -> command);
-    }
-
-    /** 모든 작업을 출발선에 세운 뒤 동시에 시작, 결과 수집 */
-    private static <T> List<T> runConcurrently(List<Callable<T>> tasks) throws Exception {
-        ExecutorService pool = Executors.newFixedThreadPool(tasks.size());
-        CountDownLatch ready = new CountDownLatch(tasks.size());
-        CountDownLatch start = new CountDownLatch(1);
-        try {
-            List<Future<T>> futures = new ArrayList<>();
-            for (Callable<T> task : tasks) {
-                futures.add(pool.submit(() -> {
-                    ready.countDown();
-                    start.await();
-                    return task.call();
-                }));
-            }
-            ready.await(10, TimeUnit.SECONDS);
-            start.countDown();
-            List<T> results = new ArrayList<>();
-            for (Future<T> future : futures) {
-                results.add(future.get(30, TimeUnit.SECONDS));
-            }
-            return results;
-        } finally {
-            pool.shutdownNow();
-        }
     }
 
     private void assertProcessedExactlyOnce(Payment payment) {

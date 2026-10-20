@@ -131,6 +131,10 @@ class PaymentConfirmationServiceTest {
             // then
             assertThat(result).isEqualTo(ConfirmationResult.LATE_APPROVAL_REFUNDING);
             assertThat(orderStatus()).isEqualTo(OrderStatus.REFUNDING);
+            assertThat(f.refunds.findByOrderNo(ORDER_NO)).singleElement().satisfies(refund -> {
+                assertThat(refund.paymentKey()).isEqualTo(payment.idempotencyKey());
+                assertThat(refund.amount()).isEqualTo(PRICE);
+            });
             assertThat(f.histories.findByOrderNo(ORDER_NO))
                     .filteredOn(h -> h.target().type() == TargetType.ORDER)
                     .extracting(StatusHistory::fromStatus, StatusHistory::toStatus, StatusHistory::actor)
@@ -179,7 +183,8 @@ class PaymentConfirmationServiceTest {
                 }
             };
             racingOrders.save(order);
-            var confirmation = new PaymentConfirmationService(f.payments, racingOrders, f.recorder, f.clock);
+            var confirmation = new PaymentConfirmationService(f.payments, racingOrders, f.recorder, f.refundOpener,
+                    f.clock);
 
             // when
             ConfirmationResult result = confirmation.confirmApproval(key(payment), TID, PRICE, Actor.pg());

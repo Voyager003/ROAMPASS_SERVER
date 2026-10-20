@@ -3,3 +3,18 @@ spring:
     name: mock-supplier
 server:
   port: 8082
+
+mock-supplier:
+  callback:
+    url: ${SUPPLIER_CALLBACK_URL:http://localhost:8080/api/issuance/callback}   # roampass-api 콜백 수신 주소
+    # 로컬 개발용 기본값. 배포 환경은 SUPPLIER_CALLBACK_SECRET 환경변수로 교체(roampass-api와 같은 값)
+    secret: ${SUPPLIER_CALLBACK_SECRET:local-dev-callback-secret}
+    delay: 3s                      # 접수 응답 후 콜백까지 지연("몇 초 뒤 콜백")
+
+  # 장애 주입 시작값(전부 0/false = 장애 없음). 실행 중 변경은 PUT /mock/supplier/config, 초기화는 POST /mock/supplier/config/reset
+  faults:
+    issue-failure-rate: 0          # 발급 실패 확률(0~1), 실패면 접수 후 실패 콜백
+    callback-delay-ms: 0           # 콜백 추가 지연(ms)
+    callback-duplicates: 0         # 같은 콜백 추가 발송 횟수
+    callback-drop: false           # 콜백 누락
+    invalid-signature: false       # 틀린 비밀키로 서명

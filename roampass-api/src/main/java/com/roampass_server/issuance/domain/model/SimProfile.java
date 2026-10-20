@@ -65,6 +65,18 @@ public final class SimProfile {
                 InstallStatus.ISSUED, now, null, null, null, null);
     }
 
+    /** 저장소에서 읽은 값으로 복원, 필수값만 확인 */
+    public static SimProfile restore(Long id, OrderNo orderNo, SimType simType, Iccid iccid,
+                                     ActivationCode activationCode, SupplierOrderNo supplierOrderNo, int usageDays,
+                                     InstallStatus status, Instant issuedAt, Instant qrViewedAt, Instant installedAt,
+                                     Instant activatedAt, Instant deletedAt) {
+        if (orderNo == null || simType == null || iccid == null || status == null || issuedAt == null) {
+            throw new InvalidValueException(CODE, "Stored SIM profile is missing required values");
+        }
+        return new SimProfile(id, orderNo, simType, iccid, activationCode, supplierOrderNo, usageDays, status,
+                issuedAt, qrViewedAt, installedAt, activatedAt, deletedAt);
+    }
+
     /** 공항에서 받은 카드에 인쇄된 ICCID를 사용자가 등록할 때 만드는 유심 프로필 */
     public static SimProfile registerUsim(OrderNo orderNo, Iccid iccid, int usageDays, Instant now) {
         validateCommon(orderNo, iccid, usageDays, now);

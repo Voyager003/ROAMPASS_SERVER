@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.roampass_server.common.domain.SimType;
 import com.roampass_server.order.domain.model.OrderStatus;
 
 interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, Long> {
@@ -19,6 +20,11 @@ interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, Long> {
     // idx_orders_status_expires_at 인덱스 사용
     List<OrderJpaEntity> findByStatusAndExpiresAtLessThanEqualOrderByExpiresAtAsc(OrderStatus status, Instant now,
                                                                                     Pageable pageable);
+
+    // 발급 요청 대상(PAID 이심), 오래된 순
+    List<OrderJpaEntity> findByStatusAndSimTypeOrderByCreatedAtAsc(OrderStatus status,
+                                                                   SimType simType,
+                                                                   Pageable pageable);
 
     /**
      * 저장된 상태가 expected일 때만 변경 반영(조건부 UPDATE), 영향 행 수 반환

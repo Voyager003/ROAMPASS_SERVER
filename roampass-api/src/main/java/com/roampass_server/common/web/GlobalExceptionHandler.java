@@ -1,5 +1,6 @@
 package com.roampass_server.common.web;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -41,6 +42,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     ResponseEntity<ProblemDetail> handleConflict(ConflictException e) {
         return problem(HttpStatus.CONFLICT, e.getCode(), e.getMessage());
+    }
+
+    // 사전 확인을 동시에 통과한 요청을 DB 유니크 제약이 막은 경우(예: 같은 ICCID 동시 등록), 트랜잭션은 롤백됨
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ResponseEntity<ProblemDetail> handleDataIntegrity(DataIntegrityViolationException e) {
+        log.warn("Data integrity violation: {}", e.getMostSpecificCause().getMessage());
+        return problem(HttpStatus.CONFLICT, "CONFLICT", "The request conflicts with existing data");
     }
 
     @ExceptionHandler(InvalidSignatureException.class)

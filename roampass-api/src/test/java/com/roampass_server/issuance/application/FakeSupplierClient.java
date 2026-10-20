@@ -32,6 +32,17 @@ public class FakeSupplierClient implements SupplierClient {
         return profiles.getOrDefault(iccid, SupplierProfileResult.unknown());
     }
 
+    private final Map<Iccid, SupplierProfileResult> activations = new HashMap<>();
+
+    public synchronized void activationReturns(Iccid iccid, SupplierProfileResult result) {
+        activations.put(iccid, result);
+    }
+
+    @Override
+    public synchronized SupplierProfileResult activateUsim(Iccid iccid) {
+        return activations.getOrDefault(iccid, SupplierProfileResult.unknown());
+    }
+
     public synchronized List<Iccid> profileQueries() {
         return profileQueries;
     }

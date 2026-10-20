@@ -16,6 +16,8 @@ interface SimProfileJpaRepository extends JpaRepository<SimProfileJpaEntity, Lon
 
     Optional<SimProfileJpaEntity> findByOrderNo(String orderNo);
 
+    boolean existsByIccid(String iccid);
+
     /**
      * 폴링 대상: 개통 전·미삭제이고 여행 시작일 창(시작일 N일 전 ~ 시작일 + 사용 일수) 안
      * 행마다 사용 일수가 달라 날짜 + 정수 연산(PostgreSQL)을 쓰는 네이티브 쿼리

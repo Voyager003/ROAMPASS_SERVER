@@ -66,6 +66,15 @@ public class MockSupplierService {
         return Optional.ofNullable(bySupplierOrderNo.get(supplierOrderNo)).map(SupplierOrder::iccid);
     }
 
+    /**
+     * 유심 개통(부록 A `POST /usim/activate`). 공항에서 받은 카드의 ICCID는 공급사가 이미 알고 있다고 보고,
+     * 처음 요청이면 프로필을 ENABLED로 등록. 같은 ICCID 재요청은 처음 개통 시각 그대로(멱등)
+     */
+    public ProfileView activateUsim(String iccid, Instant now) {
+        SupplierOrder order = byIccid.computeIfAbsent(iccid, id -> new SupplierOrder(newId("SUP-"), null, id, null));
+        return order.changeState(ProfileState.ENABLED, now);
+    }
+
     /** 시연용: 설치·개통·삭제를 흉내 내는 상태 변경 */
     public ProfileView changeState(String iccid, ProfileState state, Instant now) {
         SupplierOrder order = byIccid.get(iccid);

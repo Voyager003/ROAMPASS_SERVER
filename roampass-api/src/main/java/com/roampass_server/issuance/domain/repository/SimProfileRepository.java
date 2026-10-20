@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.roampass_server.common.domain.OrderNo;
+import com.roampass_server.issuance.domain.model.Iccid;
 import com.roampass_server.issuance.domain.model.InstallStatus;
 import com.roampass_server.issuance.domain.model.SimProfile;
 
@@ -16,6 +17,8 @@ public interface SimProfileRepository {
     SimProfile save(SimProfile profile);
 
     Optional<SimProfile> findByOrderNo(OrderNo orderNo);
+
+    boolean existsByIccid(Iccid iccid);
 
     /**
      * 설치 추적 폴링 대상: 아직 개통 전(ISSUED·QR_VIEWED·INSTALLED)이고 삭제되지 않았으며,

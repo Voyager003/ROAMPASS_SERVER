@@ -44,6 +44,12 @@ public class MockSupplierController {
                 new MockSupplierException(HttpStatus.NOT_FOUND, "PROFILE_NOT_FOUND", "Unknown ICCID"));
     }
 
+    /** 유심 개통: 프로필 ENABLED + 개통 시각 */
+    @PostMapping("/usim/activate")
+    public ProfileView activateUsim(@Valid @RequestBody ActivateUsimRequest request) {
+        return service.activateUsim(request.iccid(), Instant.now(clock));
+    }
+
     /** 시연용: 설치(INSTALLED)·개통(ENABLED)·삭제(DELETED) 흉내 */
     @PostMapping("/profiles/{iccid}/state")
     public ProfileView changeState(@PathVariable String iccid, @Valid @RequestBody ChangeStateRequest request) {

@@ -35,6 +35,7 @@ class IssuanceFixture {
     static final Instant NOW = Instant.parse("2026-10-21T00:00:00Z");
     static final OrderNo ORDER_NO = OrderNo.of("ORD-20261021-AAAA1111");
     static final Money PRICE = Money.krw(9_900);
+    static final Money USIM_PRICE = Money.krw(11_900);
     static final Duration CALLBACK_TIMEOUT = Duration.ofMinutes(2);
     static final String SECRET = "test-callback-secret";
     static final String ICCID = "8982300912345678902";
@@ -53,7 +54,8 @@ class IssuanceFixture {
     final FakeSupplierClient supplier = new FakeSupplierClient();
     final HmacSignature signer = new HmacSignature(SECRET);
     final PlanQueryService planQuery = new PlanQueryService(new FakePlanRepository()
-            .add(Plan.of(1L, PlanSpec.of("JP", 5, 3_072), SimType.ESIM, PRICE)));
+            .add(Plan.of(1L, PlanSpec.of("JP", 5, 3_072), SimType.ESIM, PRICE))
+            .add(Plan.of(3L, PlanSpec.of("JP", 5, 3_072), SimType.USIM, USIM_PRICE)));
 
     final RefundOpener refundOpener = new RefundOpener(payments, refunds, recorder);
     final IssuanceFailureService failure = new IssuanceFailureService(requests, orders, refundOpener, recorder, clock);
@@ -69,6 +71,15 @@ class IssuanceFixture {
     final ProfileSignalApplier applier = new ProfileSignalApplier(profiles, recorder, clock);
     final ProfileTrackingService tracking = new ProfileTrackingService(profiles, supplier, applier, clock, 3, 100);
     final QrViewService qrView = new QrViewService(orders, profiles, recorder, clock);
+    final UsimRegistrationService usim = new UsimRegistrationService(
+            new UsimRegistrationStartService(orders, profiles, planQuery, recorder, clock), supplier, applier, profiles);
+
+    /** 결제가 끝난 유심 주문(PICKUP_READY) */
+    Order pickupReadyUsimOrder(OrderNo orderNo) {
+        Order order = Order.create(orderNo, UserId.of("user-1"), PlanSnapshot.of(3L, SimType.USIM, USIM_PRICE),
+                LocalDate.of(2026, 10, 25), NOW, Duration.ofMinutes(10)).confirmPayment(NOW);
+        return orders.save(order);
+    }
 
     /** 발급 완료(프로필 ISSUED)까지 진행, 여행 시작일 2026-10-25·사용 5일 */
     void issued() {

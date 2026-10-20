@@ -12,4 +12,7 @@ public interface SupplierClient {
 
     /** 프로필의 현재 상태(설치·개통·삭제) 조회, 설치 추적 폴링용 */
     SupplierProfileResult getProfile(Iccid iccid);
+
+    /** 유심 개통 요청. 결과는 프로필 조회와 같은 형식(ENABLED + 개통 시각), 실패·응답 유실은 UNKNOWN */
+    SupplierProfileResult activateUsim(Iccid iccid);
 }

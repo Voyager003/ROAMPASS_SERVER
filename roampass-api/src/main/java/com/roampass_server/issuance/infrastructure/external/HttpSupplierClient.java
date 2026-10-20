@@ -77,6 +77,28 @@ public class HttpSupplierClient implements SupplierClient {
         }
     }
 
+    @Override
+    public SupplierProfileResult activateUsim(Iccid iccid) {
+        try {
+            ProfileResponse response = restClient.post().uri("/mock/supplier/usim/activate")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(new ActivateBody(iccid.value()))
+                    .retrieve()
+                    .body(ProfileResponse.class);
+            if (response == null || response.state() == null) {
+                return SupplierProfileResult.unknown();
+            }
+            return SupplierProfileResult.found(SupplierProfileState.valueOf(response.state()), response.activatedAt(),
+                    response.usedMb());
+        } catch (RestClientException | IllegalArgumentException e) {
+            log.warn("USIM activation result unknown {}: {}", iccid.value(), e.getMessage());
+            return SupplierProfileResult.unknown();
+        }
+    }
+
+    record ActivateBody(String iccid) {
+    }
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     record ProfileResponse(String iccid, String state, Instant activatedAt, long usedMb) {
     }

@@ -101,4 +101,24 @@ class HttpSupplierClientTest {
         assertThat(client.getProfile(iccid).outcome()).isEqualTo(SupplierProfileResult.Outcome.NOT_FOUND);
         assertThat(client.getProfile(iccid).outcome()).isEqualTo(SupplierProfileResult.Outcome.UNKNOWN);
     }
+
+    @Test
+    @DisplayName("유심 개통: ICCID를 보내고 ENABLED·개통 시각을 받음, 5xx면 UNKNOWN")
+    void activate_usim() {
+        // given
+        Iccid iccid = Iccid.of("8982300912345678902");
+        server.expect(requestTo("http://supplier.test/mock/supplier/usim/activate"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("""
+                        {"iccid":"8982300912345678902"}
+                        """))
+                .andRespond(withSuccess("""
+                        {"iccid":"8982300912345678902","state":"ENABLED","activatedAt":"2026-10-21T00:00:05Z","usedMb":0}
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://supplier.test/mock/supplier/usim/activate")).andRespond(withServerError());
+
+        // when // then
+        assertThat(client.activateUsim(iccid).state()).isEqualTo(SupplierProfileState.ENABLED);
+        assertThat(client.activateUsim(iccid).outcome()).isEqualTo(SupplierProfileResult.Outcome.UNKNOWN);
+    }
 }

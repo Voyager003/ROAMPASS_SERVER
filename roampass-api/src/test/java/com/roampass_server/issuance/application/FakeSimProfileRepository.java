@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.function.Function;
 
 import com.roampass_server.common.domain.OrderNo;
+import com.roampass_server.issuance.domain.model.Iccid;
 import com.roampass_server.issuance.domain.model.InstallStatus;
 import com.roampass_server.issuance.domain.model.SimProfile;
 import com.roampass_server.issuance.domain.repository.SimProfileRepository;
@@ -43,6 +44,11 @@ public class FakeSimProfileRepository implements SimProfileRepository {
     @Override
     public synchronized Optional<SimProfile> findByOrderNo(OrderNo orderNo) {
         return profiles.stream().filter(p -> p.orderNo().equals(orderNo)).findFirst();
+    }
+
+    @Override
+    public synchronized boolean existsByIccid(Iccid iccid) {
+        return profiles.stream().anyMatch(p -> p.iccid().equals(iccid));
     }
 
     @Override

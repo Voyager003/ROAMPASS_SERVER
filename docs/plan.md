@@ -75,7 +75,7 @@ P1의 `Plan`·`Order`·`StatusHistory` 위에 유스케이스·영속성·API를
 - [x] **P2-4** 영속성: Flyway `V1__init`(plan·orders·status_history + 인덱스) + `V2__seed_plans`(16개), JPA 엔티티·어댑터, 조건부 UPDATE, `Order.restore`·`StatusHistory.restore`, 설정값(`roampass.order.*`), 서비스 빈 등록
 - [x] **P2-5** API: `GET /api/plans`, `POST /api/orders`(201), `GET /api/orders/{orderNo}`, 404·검증 실패도 `ProblemDetail + code`
 - [x] **P2-6** 만료 스케줄러(30초) + 끝단 테스트(API로 주문 → 시계 10분 경과 → 만료 실행 → `EXPIRED` + history 2건), 테스트에서는 스케줄러 끔
-- [ ] **P2-7** 문서: README 2.2의 만료 관련 _(구현 예정)_ 제거, 아키텍처 절, decisions, 이 체크리스트
+- [x] **P2-7** 문서: README 2.2의 만료 관련 _(구현 예정)_ 제거, 아키텍처 절, decisions, 이 체크리스트
 - 완료 기준: 요금제 조회 → 주문 생성 → 10분 후 만료가 테스트로 증명됨, README 실행 방법대로 `bootRun` 후 API 호출 가능
 
 ## P3. 결제 — `phase/p3-payment` — 과제 2.3-②, 중복 통지 테스트

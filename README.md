@@ -7,23 +7,45 @@
 ## 1. 실행 방법
 
 ### 사전 요구사항
-- JDK 21
-- Docker (로컬 PostgreSQL과 통합 테스트용 Testcontainers에 필요)
+- Docker (방법 A 전체 기동, 방법 B의 PostgreSQL, 통합 테스트용 Testcontainers)
+- JDK 21 (방법 B로 앱을 직접 실행하거나 테스트를 돌릴 때)
 
 ### 로컬 실행
+두 가지 방법이 있습니다. 결과(포트·주소)는 같으므로 둘 중 하나만 띄웁니다.
+
+**방법 A — Docker로 전부 띄우기** (JDK 없이 Docker만 필요)
 ```bash
 git clone https://github.com/Voyager003/ROAMPASS_SERVER.git
 cd ROAMPASS_SERVER
 
-# 1) 로컬 접속 정보 파일 만들기 (둘 다 gitignore 대상, 두 파일의 값은 서로 같아야 함)
+# 1) 로컬 DB 접속 정보 (gitignore 대상)
+cp .env.example .env
+
+# 2) postgres + roampass-api + mock-pg + mock-supplier 빌드·기동 (처음 빌드는 몇 분)
+docker compose --profile app up -d --build
+
+# 3) 기동 확인 (api는 DB 준비 후 시작해 수십 초 걸릴 수 있음)
+curl http://localhost:8080/actuator/health
+curl http://localhost:8081/actuator/health
+curl http://localhost:8082/actuator/health
+
+# 로그 / 종료
+docker compose --profile app logs -f roampass-api
+docker compose --profile app down
+```
+컨테이너끼리는 서비스 이름으로 통신합니다(`roampass-api` → `mock-pg:8081`·`mock-supplier:8082`, 웹훅·콜백은 → `roampass-api:8080`). 이미지는 루트 `Dockerfile` 하나를 `MODULE` 인자로 세 앱에 공용으로 씁니다.
+
+**방법 B — 앱은 Gradle로 직접 실행** (개발 중, JDK 21 필요)
+```bash
+# 1) 로컬 접속 정보 파일 (둘 다 gitignore 대상, 두 파일의 값은 서로 같아야 함)
 cp .env.example .env
 cp roampass-api/src/main/resources/application-local.yml.example \
    roampass-api/src/main/resources/application-local.yml
 
-# 2) 로컬 PostgreSQL 기동 (localhost:5432)
+# 2) 로컬 PostgreSQL만 기동 (localhost:5432)
 docker compose up -d
 
-# 3) 세 앱 실행 (각각 다른 터미널에서)
+# 3) 세 앱 실행 (각각 다른 터미널에서. bootRun은 끌 때까지 터미널을 차지함)
 ./gradlew :roampass-api:bootRun     # http://localhost:8080
 ./gradlew :mock-pg:bootRun          # http://localhost:8081
 ./gradlew :mock-supplier:bootRun    # http://localhost:8082

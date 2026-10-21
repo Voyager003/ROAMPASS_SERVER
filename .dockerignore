@@ -1,0 +1,10 @@
+# 빌드 컨텍스트에서 제외: 산출물·캐시·로컬 비밀값·문서
+**/build/
+.gradle/
+.git/
+.idea/
+*.iml
+.env
+**/application-local.yml
+docs/
+*.md

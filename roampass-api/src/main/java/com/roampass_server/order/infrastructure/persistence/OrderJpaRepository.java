@@ -1,11 +1,13 @@
 package com.roampass_server.order.infrastructure.persistence;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,13 +15,16 @@ import org.springframework.data.repository.query.Param;
 import com.roampass_server.common.domain.SimType;
 import com.roampass_server.order.domain.model.OrderStatus;
 
-interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, Long> {
+interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, Long>, JpaSpecificationExecutor<OrderJpaEntity> {
 
     Optional<OrderJpaEntity> findByOrderNo(String orderNo);
 
     // idx_orders_status_expires_at 인덱스 사용
     List<OrderJpaEntity> findByStatusAndExpiresAtLessThanEqualOrderByExpiresAtAsc(OrderStatus status, Instant now,
                                                                                     Pageable pageable);
+
+    List<OrderJpaEntity> findByStatusInOrderByCreatedAtAsc(Collection<OrderStatus> statuses,
+                                                           Pageable pageable);
 
     // 발급 요청 대상(PAID 이심), 오래된 순
     List<OrderJpaEntity> findByStatusAndSimTypeOrderByCreatedAtAsc(OrderStatus status,

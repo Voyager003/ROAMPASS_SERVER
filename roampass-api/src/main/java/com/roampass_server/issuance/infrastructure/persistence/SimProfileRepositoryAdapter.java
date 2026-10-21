@@ -1,10 +1,15 @@
 package com.roampass_server.issuance.infrastructure.persistence;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.roampass_server.common.domain.OrderNo;
+import com.roampass_server.issuance.domain.model.Iccid;
+import com.roampass_server.issuance.domain.model.InstallStatus;
 import com.roampass_server.issuance.domain.model.SimProfile;
 import com.roampass_server.issuance.domain.repository.SimProfileRepository;
 
@@ -27,5 +32,23 @@ class SimProfileRepositoryAdapter implements SimProfileRepository {
     @Override
     public Optional<SimProfile> findByOrderNo(OrderNo orderNo) {
         return jpaRepository.findByOrderNo(orderNo.value()).map(SimProfileJpaEntity::toDomain);
+    }
+
+    @Override
+    public boolean existsByIccid(Iccid iccid) {
+        return jpaRepository.existsByIccid(iccid.value());
+    }
+
+    @Override
+    public List<SimProfile> findTrackable(LocalDate today, int lookaheadDays, int limit) {
+        return jpaRepository.findTrackable(today, today.plusDays(lookaheadDays), limit).stream()
+                .map(SimProfileJpaEntity::toDomain).toList();
+    }
+
+    @Override
+    @Transactional
+    public boolean saveIfStatus(SimProfile profile, InstallStatus expected) {
+        return jpaRepository.updateIfStatus(profile.id(), expected, profile.status(), profile.qrViewedAt(),
+                profile.installedAt(), profile.activatedAt(), profile.deletedAt()) == 1;
     }
 }

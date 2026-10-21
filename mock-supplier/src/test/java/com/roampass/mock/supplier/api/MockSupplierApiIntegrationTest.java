@@ -136,4 +136,21 @@ class MockSupplierApiIntegrationTest {
                     .bodyJson().extractingPath("$.code").isEqualTo("INVALID_FAULT_CONFIG");
         }
     }
+
+    @Nested
+    @DisplayName("POST /mock/supplier/usim/activate")
+    class ActivateUsim {
+
+        @Test
+        @DisplayName("200과 ENABLED·개통 시각, ICCID가 없으면 400")
+        void activates() {
+            // when // then
+            assertThat(mvc.post().uri("/mock/supplier/usim/activate").contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                            {"iccid":"8982300912345678910"}
+                            """)).hasStatusOk().bodyJson().extractingPath("$.state").isEqualTo("ENABLED");
+            assertThat(mvc.post().uri("/mock/supplier/usim/activate").contentType(MediaType.APPLICATION_JSON)
+                    .content("{}")).hasStatus(HttpStatus.BAD_REQUEST);
+        }
+    }
 }

@@ -1,8 +1,10 @@
 package com.roampass_server.callback.infrastructure.persistence;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -14,18 +16,23 @@ interface CallbackLogJpaRepository extends JpaRepository<CallbackLogJpaEntity, L
 
     Optional<CallbackLogJpaEntity> findByEventKey(String eventKey);
 
+    List<CallbackLogJpaEntity> findByOrderNoOrderByReceivedAtAscIdAsc(String orderNo);
+
+    List<CallbackLogJpaEntity> findByOutcomeOrderByReceivedAtDescIdDesc(CallbackOutcome outcome,
+                                                                         Pageable pageable);
+
     /**
      * event_key가 처음일 때만 INSERT, 이미 있으면 아무것도 하지 않고 0 반환
      * 같은 키를 동시에 넣으면 나중 쪽은 앞 트랜잭션이 끝날 때까지 대기 후 판정(커밋이면 0, 롤백이면 1)
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
-            insert into callback_log (source, event_key, signature_ok, payload, outcome, note, received_at)
-            values (:source, :eventKey, :signatureOk, :payload, :outcome, :note, :receivedAt)
+            insert into callback_log (source, event_key, order_no, signature_ok, payload, outcome, note, received_at)
+            values (:source, :eventKey, :orderNo, :signatureOk, :payload, :outcome, :note, :receivedAt)
             on conflict (event_key) do nothing
             """, nativeQuery = true)
     int insertIfAbsent(@Param("source") String source, @Param("eventKey") String eventKey,
-                       @Param("signatureOk") boolean signatureOk, @Param("payload") String payload,
+                       @Param("orderNo") String orderNo, @Param("signatureOk") boolean signatureOk, @Param("payload") String payload,
                        @Param("outcome") String outcome, @Param("note") String note,
                        @Param("receivedAt") Instant receivedAt);
 

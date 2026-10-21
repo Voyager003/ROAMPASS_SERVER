@@ -1,9 +1,11 @@
 package com.roampass_server.order.domain.repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
+import com.roampass_server.common.domain.PageResult;
 import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.order.domain.model.Order;
 import com.roampass_server.order.domain.model.OrderStatus;
@@ -23,6 +25,12 @@ public interface OrderRepository {
 
     /** 발급 요청 대상: PAID 상태의 이심 주문, 오래된 순 최대 {@code limit}건 */
     List<Order> findIssuable(int limit);
+
+    /** 주어진 상태의 주문, 생성 시각 오름차순 최대 {@code limit}건(어드민 이상 건 조회) */
+    List<Order> findByStatuses(Collection<OrderStatus> statuses, int limit);
+
+    /** 어드민 주문 검색, 생성 시각 내림차순(최신 먼저) */
+    PageResult<Order> search(OrderSearchCondition condition, int page, int size);
 
     /**
      * 저장된 상태가 아직 {@code expected}일 때만 주문의 변경을 저장(조건부 UPDATE)

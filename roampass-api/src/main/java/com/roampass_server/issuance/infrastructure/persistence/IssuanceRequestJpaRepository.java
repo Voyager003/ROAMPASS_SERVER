@@ -19,6 +19,8 @@ interface IssuanceRequestJpaRepository extends JpaRepository<IssuanceRequestJpaE
 
     int countByOrderNo(String orderNo);
 
+    List<IssuanceRequestJpaEntity> findByOrderNoOrderByAttemptAsc(String orderNo);
+
     // idx_issuance_request_status_requested 인덱스 사용
     List<IssuanceRequestJpaEntity> findByStatusOrderByRequestedAtAsc(IssuanceStatus status, Pageable pageable);
 

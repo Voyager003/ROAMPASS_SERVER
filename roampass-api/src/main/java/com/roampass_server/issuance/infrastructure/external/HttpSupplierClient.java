@@ -1,15 +1,21 @@
 package com.roampass_server.issuance.infrastructure.external;
 
+import java.time.Instant;
+
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.roampass_server.issuance.domain.model.Iccid;
 import com.roampass_server.issuance.domain.model.SupplierOrderNo;
 import com.roampass_server.issuance.domain.service.SupplierClient;
 import com.roampass_server.issuance.domain.service.SupplierIssueRequest;
 import com.roampass_server.issuance.domain.service.SupplierIssueResult;
+import com.roampass_server.issuance.domain.service.SupplierProfileResult;
+import com.roampass_server.issuance.domain.service.SupplierProfileState;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -46,6 +52,55 @@ public class HttpSupplierClient implements SupplierClient {
             log.warn("Supplier acceptance unknown {}: {}", request.idempotencyKey(), e.getMessage());
             return SupplierIssueResult.unknown(e.getClass().getSimpleName());
         }
+    }
+
+    @Override
+    public SupplierProfileResult getProfile(Iccid iccid) {
+        try {
+            ProfileResponse response = restClient.get().uri("/mock/supplier/profiles/{iccid}", iccid.value())
+                    .retrieve()
+                    .body(ProfileResponse.class);
+            if (response == null || response.state() == null) {
+                return SupplierProfileResult.unknown();
+            }
+            return SupplierProfileResult.found(SupplierProfileState.valueOf(response.state()), response.activatedAt(),
+                    response.usedMb());
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode().value() == HttpStatus.NOT_FOUND.value()) {
+                return SupplierProfileResult.notFound();
+            }
+            log.warn("Supplier rejected profile query {}: {}", iccid.value(), e.getStatusCode());
+            return SupplierProfileResult.unknown();
+        } catch (RestClientException | IllegalArgumentException e) {
+            log.warn("Supplier profile query failed {}: {}", iccid.value(), e.getMessage());
+            return SupplierProfileResult.unknown();
+        }
+    }
+
+    @Override
+    public SupplierProfileResult activateUsim(Iccid iccid) {
+        try {
+            ProfileResponse response = restClient.post().uri("/mock/supplier/usim/activate")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(new ActivateBody(iccid.value()))
+                    .retrieve()
+                    .body(ProfileResponse.class);
+            if (response == null || response.state() == null) {
+                return SupplierProfileResult.unknown();
+            }
+            return SupplierProfileResult.found(SupplierProfileState.valueOf(response.state()), response.activatedAt(),
+                    response.usedMb());
+        } catch (RestClientException | IllegalArgumentException e) {
+            log.warn("USIM activation result unknown {}: {}", iccid.value(), e.getMessage());
+            return SupplierProfileResult.unknown();
+        }
+    }
+
+    record ActivateBody(String iccid) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record ProfileResponse(String iccid, String state, Instant activatedAt, long usedMb) {
     }
 
     record IssueBody(String idempotencyKey, String orderNo) {

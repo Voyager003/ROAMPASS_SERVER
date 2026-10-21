@@ -176,4 +176,24 @@ class MockSupplierServiceTest {
                             e -> assertThat(e.getCode()).isEqualTo("PROFILE_NOT_FOUND"));
         }
     }
+
+    @Nested
+    @DisplayName("유심 개통 요청은")
+    class ActivateUsim {
+
+        @Test
+        @DisplayName("ICCID의 프로필을 ENABLED로 만들고 개통 시각을 돌려주며, 다시 요청해도 처음 개통 시각 그대로")
+        void activates_once() {
+            // when
+            ProfileView first = service.activateUsim("8982300912345678902", NOW);
+            ProfileView again = service.activateUsim("8982300912345678902", NOW.plusSeconds(60));
+
+            // then
+            assertThat(first.state()).isEqualTo(ProfileState.ENABLED);
+            assertThat(first.activatedAt()).isEqualTo(NOW);
+            assertThat(again.activatedAt()).isEqualTo(NOW);
+            assertThat(service.findProfile("8982300912345678902")).get()
+                    .extracting(ProfileView::state).isEqualTo(ProfileState.ENABLED);
+        }
+    }
 }

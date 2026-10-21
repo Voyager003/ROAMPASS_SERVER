@@ -20,6 +20,9 @@ public interface IssuanceRequestRepository {
 
     int countByOrderNo(OrderNo orderNo);
 
+    /** 주문의 발급 요청 전체, 시도 번호 오름차순 */
+    List<IssuanceRequest> findByOrderNo(OrderNo orderNo);
+
     /** 공급사 접수 응답을 아직 못 받은 요청(재전송 대상), 오래된 순 */
     List<IssuanceRequest> findPending(int limit);
 

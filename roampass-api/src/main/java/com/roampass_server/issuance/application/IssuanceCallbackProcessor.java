@@ -78,12 +78,12 @@ public class IssuanceCallbackProcessor {
         }
         Instant now = Instant.now(clock);
         String eventKey = eventKey(command.eventId());
+        OrderNo orderNo = OrderNo.of(command.orderNo());
         if (!callbackLogRepository.insertIfAbsent(
-                CallbackLog.received(CallbackSource.SUPPLIER, eventKey, rawBody, now))) {
+                CallbackLog.received(CallbackSource.SUPPLIER, eventKey, orderNo, rawBody, now))) {
             log.info("Duplicate supplier callback {}", eventKey);
             return CallbackResult.DUPLICATE;
         }
-        OrderNo orderNo = OrderNo.of(command.orderNo());
         Outcome outcome = requestRepository.findLatestByOrderNo(orderNo).isEmpty()
                 ? new Outcome(CallbackResult.ORDER_NOT_FOUND, "UNKNOWN_ORDER")
                 : switch (command.eventType() == null ? "" : command.eventType()) {

@@ -31,4 +31,9 @@ public record IdempotencyKey(String value) {
     public static IdempotencyKey from(String value) {
         return new IdempotencyKey(value);
     }
+
+    /** 키에 들어 있는 주문번호({@code {orderNo}-{attempt}}의 앞부분) */
+    public OrderNo orderNo() {
+        return OrderNo.of(value.substring(0, value.lastIndexOf('-')));
+    }
 }

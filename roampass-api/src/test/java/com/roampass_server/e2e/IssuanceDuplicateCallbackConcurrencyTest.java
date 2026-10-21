@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -39,6 +38,7 @@ import com.roampass_server.payment.application.PaymentRequestService;
 import com.roampass_server.payment.domain.model.Payment;
 import com.roampass_server.payment.domain.model.PgTid;
 import com.roampass_server.support.IntegrationTest;
+import com.roampass_server.support.TestIccids;
 
 /**
  * 과제 필수 테스트: 같은 공급사 콜백 N개를 동시에 보내도 한 주문에 프로필 1개
@@ -128,7 +128,7 @@ class IssuanceDuplicateCallbackConcurrencyTest {
         // given
         Issuance issuance = acceptedIssuance();
         String eventId = "sevt_same_" + issuance.orderNo().value();
-        String iccid = randomIccid();
+        String iccid = TestIccids.random();
         List<Callable<CallbackResult>> tasks = new ArrayList<>();
         for (int i = 0; i < THREADS; i++) {
             tasks.add(() -> sendIssued(issuance, eventId, iccid));
@@ -152,7 +152,7 @@ class IssuanceDuplicateCallbackConcurrencyTest {
     void distinct_events_same_result_concurrently() throws Exception {
         // given
         Issuance issuance = acceptedIssuance();
-        String iccid = randomIccid();
+        String iccid = TestIccids.random();
         List<Callable<CallbackResult>> tasks = new ArrayList<>();
         for (int i = 0; i < THREADS; i++) {
             String eventId = "sevt_" + i + "_" + issuance.orderNo().value();
@@ -168,27 +168,5 @@ class IssuanceDuplicateCallbackConcurrencyTest {
         assertThat(counts).containsEntry(CallbackResult.PROCESSED, 1L)
                 .containsEntry(CallbackResult.ALREADY_APPLIED, (long) THREADS - 1);
         assertOneProfile(issuance);
-    }
-
-    /** 89 + 랜덤 16자리 + Luhn 체크 디지트(19자리), 테스트마다 달라 ICCID 유니크 제약과 충돌하지 않음 */
-    private static String randomIccid() {
-        StringBuilder digits = new StringBuilder("89");
-        for (int i = 0; i < 16; i++) {
-            digits.append(ThreadLocalRandom.current().nextInt(10));
-        }
-        int sum = 0;
-        boolean doubleIt = true;
-        for (int i = digits.length() - 1; i >= 0; i--) {
-            int d = digits.charAt(i) - '0';
-            if (doubleIt) {
-                d *= 2;
-                if (d > 9) {
-                    d -= 9;
-                }
-            }
-            sum += d;
-            doubleIt = !doubleIt;
-        }
-        return digits.append((10 - sum % 10) % 10).toString();
     }
 }

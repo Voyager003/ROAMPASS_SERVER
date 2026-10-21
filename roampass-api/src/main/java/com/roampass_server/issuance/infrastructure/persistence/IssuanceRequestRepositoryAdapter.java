@@ -42,6 +42,12 @@ class IssuanceRequestRepositoryAdapter implements IssuanceRequestRepository {
     }
 
     @Override
+    public List<IssuanceRequest> findByOrderNo(OrderNo orderNo) {
+        return jpaRepository.findByOrderNoOrderByAttemptAsc(orderNo.value()).stream()
+                .map(IssuanceRequestJpaEntity::toDomain).toList();
+    }
+
+    @Override
     public List<IssuanceRequest> findPending(int limit) {
         return jpaRepository.findByStatusOrderByRequestedAtAsc(IssuanceStatus.PENDING, PageRequest.of(0, limit))
                 .stream().map(IssuanceRequestJpaEntity::toDomain).toList();

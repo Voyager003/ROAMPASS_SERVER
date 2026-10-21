@@ -41,6 +41,12 @@ public class FakeIssuanceRequestRepository implements IssuanceRequestRepository 
     }
 
     @Override
+    public synchronized List<IssuanceRequest> findByOrderNo(OrderNo orderNo) {
+        return requests.stream().filter(r -> r.orderNo().equals(orderNo))
+                .sorted(Comparator.comparingInt(IssuanceRequest::attempt)).toList();
+    }
+
+    @Override
     public synchronized List<IssuanceRequest> findPending(int limit) {
         return requests.stream().filter(r -> r.status() == IssuanceStatus.PENDING)
                 .sorted(Comparator.comparing(IssuanceRequest::requestedAt)).limit(limit).toList();

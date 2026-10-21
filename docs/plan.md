@@ -136,8 +136,8 @@ P1의 `Plan`·`Order`·`StatusHistory` 위에 유스케이스·영속성·API를
 
 ## P7. 컨테이너 · 배포 · 프론트 연동 확인 — `phase/p7-deploy` — 2.5-② (2026-10-21 제출 마감보다 앞으로, decisions #103)
 
-- [ ] **P7-1** 이미지: 루트 `Dockerfile` 하나를 `MODULE` 인자로 세 앱에 공용(멀티스테이지, Docker 안에서 Gradle `bootJar` → JRE 이미지, root 아닌 사용자, `JAVA_OPTS` 기본 `-XX:MaxRAMPercentage=75`), `.dockerignore` (decisions #104)
-- [ ] **P7-2** 로컬 전체 기동: `compose.yaml`에 `app` profile로 api·mock-pg·mock-supplier 추가(서비스 이름으로 연결, api는 `prod` 프로필 + 환경변수, postgres health 확인 후 api 시작). `docker compose up -d`는 지금처럼 DB만. README 실행 방법 갱신
+- [x] **P7-1** 이미지: 루트 `Dockerfile` 하나를 `MODULE` 인자로 세 앱에 공용(멀티스테이지, Docker 안에서 Gradle `bootJar` → JRE 이미지, root 아닌 사용자, `JAVA_OPTS` 기본 `-XX:MaxRAMPercentage=75`), `.dockerignore` (decisions #104)
+- [x] **P7-2** 로컬 전체 기동: `compose.yaml`에 `app` profile로 api·mock-pg·mock-supplier 추가(서비스 이름으로 연결, api는 `prod` 프로필 + 환경변수, postgres health 확인 후 api 시작). `docker compose up -d`는 지금처럼 DB만. README 실행 방법 갱신
 - [ ] **P7-3** 프론트(`roampass`)와 연동 확인: 구매 흐름·내 SIM·어드민 화면, 장애 주입(P6에서 이동, 프론트 F1-11과 같은 확인). 발견한 차이 수정
 - [ ] **P7-4** `linux/amd64` 이미지 빌드 → 레지스트리 push
 - [ ] **P7-5** Oracle Always Free AMD Micro 2대: A = `roampass-api` + postgres, B = `mock-pg` + `mock-supplier`. 스왑, Docker, VCN 보안 규칙(A↔B 사설 IP), 인스턴스별 compose(`deploy/`), 외부 공개 범위(미결 7)

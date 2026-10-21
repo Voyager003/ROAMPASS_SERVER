@@ -60,7 +60,7 @@ public class MySimQueryService {
         return orderRepository.findByUser(userId, VISIBLE, page, size).map(order -> {
             SimProfile profile = profileRepository.findByOrderNo(order.orderNo()).orElse(null);
             return new MySimSummary(order.orderNo().value(), order.planId(), order.simType(), order.amount(),
-                    order.travelStartDate(), order.status(), profile == null ? null : profile.status(),
+                    order.travelStartDate(), order.status(), profile == null ? null : profile.effectiveStatus(Instant.now(clock)),
                     order.createdAt());
         });
     }
@@ -105,7 +105,7 @@ public class MySimQueryService {
         boolean activated = p.activatedAt() != null;
         Duration remaining = p.remaining(now);
         return new SimInfo(p.iccid().value(), p.activationCode() == null ? null : p.activationCode().value(),
-                p.status(), p.usageDays(), p.activatedAt(),
+                p.effectiveStatus(now), p.usageDays(), p.activatedAt(),
                 activated ? p.usagePeriod().expiresAt() : null, activated ? p.usagePeriod().expiresAtKst() : null,
                 remaining == null ? null : remaining.toSeconds(), p.isDeleted());
     }

@@ -24,7 +24,6 @@ import com.roampass_server.order.domain.model.Order;
 import com.roampass_server.order.domain.model.OrderIdempotencyKey;
 import com.roampass_server.order.domain.model.OrderStatus;
 import com.roampass_server.order.domain.repository.OrderRepository;
-import com.roampass_server.order.domain.repository.OrderSearchCondition;
 import com.roampass_server.support.IntegrationTest;
 import com.roampass_server.support.PersistenceTestFixtures;
 
@@ -150,34 +149,6 @@ class OrderRepositoryAdapterIntegrationTest {
             Order found = orderRepository.findByOrderNo(order.orderNo()).orElseThrow();
             assertThat(found.status()).isEqualTo(OrderStatus.ISSUED);
             assertThat(found.issuedAt()).isEqualTo(NOW.plusSeconds(120));
-        }
-    }
-
-    @Nested
-    @DisplayName("어드민 검색은")
-    class Search {
-
-        @Test
-        @DisplayName("상태·SIM 종류·생성 기간으로 거르고 최신순으로 페이지를 나눈다")
-        void filters_sorts_and_pages() {
-            // given
-            orderRepository.save(pendingOrder("SRCH0001", NOW));
-            orderRepository.save(pendingOrder("SRCH0002", NOW.plusSeconds(60)));
-            Order paid = orderRepository.save(pendingOrder("SRCH0003", NOW.plusSeconds(120)));
-            orderRepository.saveIfStatus(paid.confirmPayment(NOW.plusSeconds(120)), OrderStatus.PENDING);
-            OrderSearchCondition pendingInRange = new OrderSearchCondition(OrderStatus.PENDING,
-                    SimType.ESIM, NOW, NOW.plusSeconds(3_600));
-
-            // when
-            var firstPage = orderRepository.search(pendingInRange, 0, 1);
-            var all = orderRepository.search(pendingInRange, 0, 10);
-
-            // then
-            assertThat(firstPage.totalElements()).isEqualTo(2);
-            assertThat(firstPage.content()).extracting(o -> o.orderNo().value())
-                    .containsExactly("ORD-20261020-SRCH0002");
-            assertThat(all.content()).extracting(o -> o.orderNo().value())
-                    .containsExactly("ORD-20261020-SRCH0002", "ORD-20261020-SRCH0001");
         }
     }
 

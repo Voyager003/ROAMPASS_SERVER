@@ -136,15 +136,21 @@ class MySimQueryServiceTest {
         }
 
         @Test
-        @DisplayName("사용 기간이 지나면 남은 시간은 0")
+        @DisplayName("사용 기간이 지나면 설치 상태는 EXPIRED(조회 시점 판정), 남은 시간은 0")
         void expired() {
             // given
             f.issued();
             activate();
             f.clock.advance(Duration.ofDays(6));
 
-            // when // then
-            assertThat(service.detail(USER, ORDER_NO).sim().remainingSeconds()).isZero();
+            // when
+            MySimDetail detail = service.detail(USER, ORDER_NO);
+
+            // then
+            assertThat(detail.sim().installStatus()).isEqualTo(InstallStatus.EXPIRED);
+            assertThat(detail.sim().remainingSeconds()).isZero();
+            assertThat(service.list(USER, 0, 20).content()).singleElement()
+                    .satisfies(s -> assertThat(s.installStatus()).isEqualTo(InstallStatus.EXPIRED));
         }
 
         @Test

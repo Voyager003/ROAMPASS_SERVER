@@ -21,13 +21,15 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 
 import com.roampass_server.admin.application.AdminOrderQueryService;
+import com.roampass_server.admin.application.AdminOrderSearchCondition;
 import com.roampass_server.common.application.exception.NotFoundException;
 import com.roampass_server.common.config.ClockConfig;
 import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.common.domain.PageResult;
 import com.roampass_server.common.domain.SimType;
+import com.roampass_server.issuance.domain.model.InstallStatus;
 import com.roampass_server.order.domain.model.OrderStatus;
-import com.roampass_server.order.domain.repository.OrderSearchCondition;
+import com.roampass_server.payment.domain.model.PaymentStatus;
 
 @WebMvcTest(controllers = AdminOrderController.class)
 @Import(ClockConfig.class)
@@ -56,13 +58,15 @@ class AdminOrderControllerTest {
         given(queryService.search(any(), anyInt(), anyInt())).willReturn(new PageResult<>(List.of(), 1, 10, 0));
 
         // when
-        var result = mvc.get().uri("/admin/orders?status=PAID&simType=ESIM&from=2026-10-20T00:00:00Z"
-                + "&to=2026-10-21T00:00:00Z&page=1&size=10").header("X-Admin-Id", "admin-1");
+        var result = mvc.get().uri("/admin/orders?status=ISSUED&paymentStatus=APPROVED&installStatus=INSTALLED"
+                + "&simType=ESIM&from=2026-10-20T00:00:00Z&to=2026-10-21T00:00:00Z&page=1&size=10")
+                .header("X-Admin-Id", "admin-1");
 
         // then
         assertThat(result).hasStatusOk().bodyJson().extractingPath("$.asOf").isNotNull();
-        verify(queryService).search(new OrderSearchCondition(OrderStatus.PAID, SimType.ESIM,
-                Instant.parse("2026-10-20T00:00:00Z"), Instant.parse("2026-10-21T00:00:00Z")), 1, 10);
+        verify(queryService).search(new AdminOrderSearchCondition(OrderStatus.ISSUED, PaymentStatus.APPROVED,
+                InstallStatus.INSTALLED, SimType.ESIM, Instant.parse("2026-10-20T00:00:00Z"),
+                Instant.parse("2026-10-21T00:00:00Z")), 1, 10);
     }
 
     @Test

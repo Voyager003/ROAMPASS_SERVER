@@ -1,5 +1,7 @@
 package com.roampass_server.admin.application;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 
@@ -22,14 +24,14 @@ import com.roampass_server.issuance.domain.repository.IssuanceRequestRepository;
 import com.roampass_server.issuance.domain.repository.SimProfileRepository;
 import com.roampass_server.order.domain.model.Order;
 import com.roampass_server.order.domain.repository.OrderRepository;
-import com.roampass_server.order.domain.repository.OrderSearchCondition;
 import com.roampass_server.payment.domain.model.Payment;
 import com.roampass_server.payment.domain.repository.PaymentRepository;
 import com.roampass_server.payment.domain.repository.RefundAttemptRepository;
 
 /**
- * 어드민 주문 조회. 목록은 주문 행마다 최근 결제·프로필을 추가 조회(N+1, 페이지 크기 최대 50으로 제한)
- * 상태는 저장된 값 그대로(조회 시점 판정 없음) — 운영자는 시스템이 실제로 기록한 상태를 봄
+ * 어드민 주문 조회. 목록은 검색 포트로 주문번호를 고른 뒤 행마다 주문·최근 결제·프로필을 추가 조회(N+1, 페이지 크기 최대 50으로 제한)
+ * 주문·결제 상태는 저장된 값 그대로(운영자는 시스템이 실제로 기록한 상태를 봄)
+ * 설치 상태만 조회 시점 기준: 만료는 저장하는 단계가 없어(시간으로 판정) 저장값 그대로면 EXPIRED가 보이지 않음
  */
 @Transactional(readOnly = true)
 public class AdminOrderQueryService {
@@ -41,13 +43,16 @@ public class AdminOrderQueryService {
     private final RefundAttemptRepository refundAttemptRepository;
     private final StatusHistoryRepository historyRepository;
     private final CallbackLogRepository callbackLogRepository;
+    private final AdminOrderSearch orderSearch;
+    private final Clock clock;
 
     public AdminOrderQueryService(OrderRepository orderRepository, PaymentRepository paymentRepository,
                                   SimProfileRepository profileRepository,
                                   IssuanceRequestRepository issuanceRequestRepository,
                                   RefundAttemptRepository refundAttemptRepository,
                                   StatusHistoryRepository historyRepository,
-                                  CallbackLogRepository callbackLogRepository) {
+                                  CallbackLogRepository callbackLogRepository, AdminOrderSearch orderSearch,
+                                  Clock clock) {
         this.orderRepository = orderRepository;
         this.paymentRepository = paymentRepository;
         this.profileRepository = profileRepository;
@@ -55,10 +60,14 @@ public class AdminOrderQueryService {
         this.refundAttemptRepository = refundAttemptRepository;
         this.historyRepository = historyRepository;
         this.callbackLogRepository = callbackLogRepository;
+        this.orderSearch = orderSearch;
+        this.clock = clock;
     }
 
-    public PageResult<AdminOrderSummary> search(OrderSearchCondition condition, int page, int size) {
-        return orderRepository.search(condition, page, size).map(this::summarize);
+    public PageResult<AdminOrderSummary> search(AdminOrderSearchCondition condition, int page, int size) {
+        return orderSearch.search(condition, Instant.now(clock), page, size)
+                .map(orderNo -> summarize(orderRepository.findByOrderNo(orderNo)
+                        .orElseThrow(() -> new IllegalStateException("Searched order disappeared: " + orderNo.value()))));
     }
 
     public AdminOrderDetail detail(OrderNo orderNo) {
@@ -78,7 +87,7 @@ public class AdminOrderQueryService {
                                 r.supplierOrderNo() == null ? null : r.supplierOrderNo().value(), r.failureReason(),
                                 r.requestedAt(), r.completedAt()))
                         .toList(),
-                profileRepository.findByOrderNo(orderNo).map(AdminOrderQueryService::profileInfo).orElse(null),
+                profileRepository.findByOrderNo(orderNo).map(p -> profileInfo(p, Instant.now(clock))).orElse(null),
                 refundAttemptRepository.findByOrderNo(orderNo).stream()
                         .map(r -> new RefundInfo(r.id(), r.status(), r.amount(), r.attemptCount(), r.nextRetryAt(),
                                 r.lastError(), r.createdAt(), r.completedAt()))
@@ -99,13 +108,14 @@ public class AdminOrderQueryService {
         Payment latest = payments.stream().max(Comparator.comparing(Payment::requestedAt)).orElse(null);
         SimProfile profile = profileRepository.findByOrderNo(order.orderNo()).orElse(null);
         return new AdminOrderSummary(order.orderNo().value(), order.userId().value(), order.simType(), order.amount(),
-                order.status(), latest == null ? null : latest.status(), profile == null ? null : profile.status(),
+                order.status(), latest == null ? null : latest.status(),
+                profile == null ? null : profile.effectiveStatus(Instant.now(clock)),
                 order.createdAt());
     }
 
-    private static ProfileInfo profileInfo(SimProfile p) {
+    private static ProfileInfo profileInfo(SimProfile p, Instant now) {
         boolean activated = p.activatedAt() != null;
-        return new ProfileInfo(p.simType(), p.iccid().value(), p.status(), p.usageDays(), p.issuedAt(),
+        return new ProfileInfo(p.simType(), p.iccid().value(), p.effectiveStatus(now), p.usageDays(), p.issuedAt(),
                 p.qrViewedAt(), p.installedAt(), p.activatedAt(), p.deletedAt(),
                 activated ? p.usagePeriod().expiresAt() : null, activated ? p.usagePeriod().expiresAtKst() : null,
                 p.isRefundable());

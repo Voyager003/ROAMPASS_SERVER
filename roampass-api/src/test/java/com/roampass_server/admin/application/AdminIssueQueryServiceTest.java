@@ -21,7 +21,8 @@ class AdminIssueQueryServiceTest {
     private final IssuanceFixture f = new IssuanceFixture();
     private final AdminIssueQueryService service = new AdminIssueQueryService(f.orders, f.payments, f.callbackLogs,
             new AdminOrderQueryService(f.orders, f.payments, f.profiles, f.requests, f.refunds, f.histories,
-                    f.callbackLogs), f.clock, STUCK, 50);
+                    f.callbackLogs, new FakeAdminOrderSearch(f.orders, f.payments, f.profiles), f.clock),
+            f.clock, STUCK, 50);
 
     @Test
     @DisplayName("결제 승인 후 5분이 지나도록 발급되지 않은 주문이 '결제 후 미발급'에 나온다 (5분 전에는 안 나옴)")

@@ -3,15 +3,20 @@ package com.roampass_server.admin.infrastructure.config;
 import java.time.Clock;
 import java.time.Duration;
 
+import javax.sql.DataSource;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 import com.roampass_server.admin.application.AdminActionExecutor;
 import com.roampass_server.admin.application.AdminActionService;
 import com.roampass_server.admin.application.AdminIssueQueryService;
 import com.roampass_server.admin.application.AdminOrderQueryService;
+import com.roampass_server.admin.application.AdminOrderSearch;
+import com.roampass_server.admin.infrastructure.persistence.JdbcAdminOrderSearch;
 import com.roampass_server.callback.domain.repository.CallbackLogRepository;
 import com.roampass_server.history.application.StatusHistoryRecorder;
 import com.roampass_server.history.domain.repository.StatusHistoryRepository;
@@ -39,14 +44,21 @@ public class AdminConfig {
     }
 
     @Bean
+    AdminOrderSearch adminOrderSearch(DataSource dataSource) {
+        return new JdbcAdminOrderSearch(new NamedParameterJdbcTemplate(dataSource));
+    }
+
+    @Bean
     AdminOrderQueryService adminOrderQueryService(OrderRepository orderRepository, PaymentRepository paymentRepository,
                                                   SimProfileRepository profileRepository,
                                                   IssuanceRequestRepository issuanceRequestRepository,
                                                   RefundAttemptRepository refundAttemptRepository,
                                                   StatusHistoryRepository historyRepository,
-                                                  CallbackLogRepository callbackLogRepository) {
+                                                  CallbackLogRepository callbackLogRepository,
+                                                  AdminOrderSearch orderSearch, Clock clock) {
         return new AdminOrderQueryService(orderRepository, paymentRepository, profileRepository,
-                issuanceRequestRepository, refundAttemptRepository, historyRepository, callbackLogRepository);
+                issuanceRequestRepository, refundAttemptRepository, historyRepository, callbackLogRepository,
+                orderSearch, clock);
     }
 
     @Bean

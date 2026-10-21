@@ -13,6 +13,7 @@ import com.roampass_server.common.domain.PageResult;
 import com.roampass_server.common.domain.SimType;
 import com.roampass_server.common.domain.UserId;
 import com.roampass_server.order.domain.model.Order;
+import com.roampass_server.order.domain.model.OrderIdempotencyKey;
 import com.roampass_server.order.domain.model.OrderStatus;
 import com.roampass_server.order.domain.repository.OrderRepository;
 import com.roampass_server.order.domain.repository.OrderSearchCondition;
@@ -36,6 +37,22 @@ public class FakeOrderRepository implements OrderRepository {
     @Override
     public Optional<Order> findByOrderNo(OrderNo orderNo) {
         return Optional.ofNullable(orders.get(orderNo));
+    }
+
+    @Override
+    public synchronized boolean insertIfKeyAbsent(Order order) {
+        if (findByUserAndIdempotencyKey(order.userId(), order.idempotencyKey()).isPresent()) {
+            return false; // 실제 구현의 ON CONFLICT DO NOTHING에 대응
+        }
+        save(order);
+        return true;
+    }
+
+    @Override
+    public Optional<Order> findByUserAndIdempotencyKey(UserId userId, OrderIdempotencyKey key) {
+        return orders.values().stream()
+                .filter(o -> o.isOwnedBy(userId) && key.equals(o.idempotencyKey()))
+                .findFirst();
     }
 
     @Override

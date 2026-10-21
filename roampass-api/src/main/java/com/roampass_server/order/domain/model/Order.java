@@ -33,10 +33,11 @@ public final class Order {
     private final Instant createdAt;
     private final Instant expiresAt;
     private final Instant issuedAt;
+    private final OrderIdempotencyKey idempotencyKey;
 
     private Order(Long id, OrderNo orderNo, UserId userId, Long planId, SimType simType, Money amount,
                   LocalDate travelStartDate, OrderStatus status, Instant createdAt, Instant expiresAt,
-                  Instant issuedAt) {
+                  Instant issuedAt, OrderIdempotencyKey idempotencyKey) {
         this.id = id;
         this.orderNo = orderNo;
         this.userId = userId;
@@ -48,6 +49,7 @@ public final class Order {
         this.createdAt = createdAt;
         this.expiresAt = expiresAt;
         this.issuedAt = issuedAt;
+        this.idempotencyKey = idempotencyKey;
     }
 
     /**
@@ -58,6 +60,16 @@ public final class Order {
      */
     public static Order create(OrderNo orderNo, UserId userId, PlanSnapshot plan, LocalDate travelStartDate,
                                Instant now, Duration paymentWindow) {
+        return create(orderNo, userId, plan, travelStartDate, now, paymentWindow, null);
+    }
+
+    /**
+     * 멱등 키를 가진 새 PENDING 주문 생성
+     *
+     * @param idempotencyKey 클라이언트가 보낸 주문 생성 멱등 키, 없으면 {@code null}
+     */
+    public static Order create(OrderNo orderNo, UserId userId, PlanSnapshot plan, LocalDate travelStartDate,
+                               Instant now, Duration paymentWindow, OrderIdempotencyKey idempotencyKey) {
         if (orderNo == null || userId == null || plan == null || travelStartDate == null || now == null) {
             throw new InvalidValueException("INVALID_ORDER", "Order number, user, plan, travel start date and time are required");
         }
@@ -66,7 +78,7 @@ public final class Order {
         }
         validateTravelStartDate(travelStartDate, now);
         return new Order(null, orderNo, userId, plan.planId(), plan.simType(), plan.price(), travelStartDate,
-                OrderStatus.PENDING, now, now.plus(paymentWindow), null);
+                OrderStatus.PENDING, now, now.plus(paymentWindow), null, idempotencyKey);
     }
 
     /**
@@ -76,12 +88,25 @@ public final class Order {
     public static Order restore(Long id, OrderNo orderNo, UserId userId, Long planId, SimType simType, Money amount,
                                 LocalDate travelStartDate, OrderStatus status, Instant createdAt, Instant expiresAt,
                                 Instant issuedAt) {
+        return restore(id, orderNo, userId, planId, simType, amount, travelStartDate, status, createdAt, expiresAt,
+                issuedAt, null);
+    }
+
+    /** 저장된 값으로 주문 복원(멱등 키 포함) */
+    public static Order restore(Long id, OrderNo orderNo, UserId userId, Long planId, SimType simType, Money amount,
+                                LocalDate travelStartDate, OrderStatus status, Instant createdAt, Instant expiresAt,
+                                Instant issuedAt, OrderIdempotencyKey idempotencyKey) {
         if (orderNo == null || userId == null || planId == null || simType == null || amount == null
                 || travelStartDate == null || status == null || createdAt == null || expiresAt == null) {
             throw new InvalidValueException("INVALID_ORDER", "Stored order is missing required values");
         }
         return new Order(id, orderNo, userId, planId, simType, amount, travelStartDate, status, createdAt, expiresAt,
-                issuedAt);
+                issuedAt, idempotencyKey);
+    }
+
+    /** 같은 멱등 키로 다시 온 요청이 처음 요청과 같은 내용(요금제·여행 시작일)인지 */
+    public boolean matchesRequest(Long requestedPlanId, LocalDate requestedTravelStartDate) {
+        return planId.equals(requestedPlanId) && travelStartDate.equals(requestedTravelStartDate);
     }
 
     // "오늘"은 UTC 날짜가 아닌 한국의 운영일
@@ -181,11 +206,13 @@ public final class Order {
         if (!status.canTransitionTo(target)) {
             throw new IllegalStateTransitionException("Order", status, target);
         }
-        return new Order(id, orderNo, userId, planId, simType, amount, travelStartDate, target, createdAt, expiresAt, issuedAt);
+        return new Order(id, orderNo, userId, planId, simType, amount, travelStartDate, target, createdAt, expiresAt, issuedAt,
+                idempotencyKey);
     }
 
     private Order withIssuedAt(Instant at) {
-        return new Order(id, orderNo, userId, planId, simType, amount, travelStartDate, status, createdAt, expiresAt, at);
+        return new Order(id, orderNo, userId, planId, simType, amount, travelStartDate, status, createdAt, expiresAt, at,
+                idempotencyKey);
     }
 
     public Long id() {
@@ -230,6 +257,11 @@ public final class Order {
 
     public Instant issuedAt() {
         return issuedAt;
+    }
+
+    /** 주문 생성 멱등 키, 키 없이 만든 주문이면 {@code null} */
+    public OrderIdempotencyKey idempotencyKey() {
+        return idempotencyKey;
     }
 
     @Override

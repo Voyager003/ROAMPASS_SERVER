@@ -16,6 +16,7 @@ import com.roampass_server.common.domain.PageResult;
 import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.common.domain.UserId;
 import com.roampass_server.order.domain.model.Order;
+import com.roampass_server.order.domain.model.OrderIdempotencyKey;
 import com.roampass_server.common.domain.SimType;
 import com.roampass_server.order.domain.model.OrderStatus;
 import com.roampass_server.order.domain.repository.OrderRepository;
@@ -41,6 +42,23 @@ class OrderRepositoryAdapter implements OrderRepository {
     @Override
     public Optional<Order> findByOrderNo(OrderNo orderNo) {
         return jpaRepository.findByOrderNo(orderNo.value()).map(OrderJpaEntity::toDomain);
+    }
+
+    @Override
+    public boolean insertIfKeyAbsent(Order order) {
+        if (order.idempotencyKey() == null) {
+            throw new IllegalArgumentException("insertIfKeyAbsent requires an idempotency key");
+        }
+        return jpaRepository.insertIfKeyAbsent(order.orderNo().value(), order.userId().value(), order.planId(),
+                order.simType().name(), order.amount().amount(), order.amount().currency().name(),
+                order.travelStartDate(), order.status().name(), order.createdAt(), order.expiresAt(),
+                order.issuedAt(), order.idempotencyKey().value()) == 1;
+    }
+
+    @Override
+    public Optional<Order> findByUserAndIdempotencyKey(UserId userId, OrderIdempotencyKey key) {
+        return jpaRepository.findByUserIdAndIdempotencyKey(userId.value(), key.value())
+                .map(OrderJpaEntity::toDomain);
     }
 
     @Override

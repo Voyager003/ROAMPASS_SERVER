@@ -1,6 +1,7 @@
 package com.roampass_server.order.infrastructure.persistence;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -19,6 +20,29 @@ import com.roampass_server.order.domain.model.OrderStatus;
 interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, Long>, JpaSpecificationExecutor<OrderJpaEntity> {
 
     Optional<OrderJpaEntity> findByOrderNo(String orderNo);
+
+    // uq_orders_user_idempotency_key 인덱스 사용
+    Optional<OrderJpaEntity> findByUserIdAndIdempotencyKey(String userId, String idempotencyKey);
+
+    /**
+     * 같은 사용자·같은 멱등 키의 주문이 없을 때만 INSERT, 이미 있으면 아무것도 하지 않고 0 반환
+     * 같은 키를 동시에 넣으면 나중 쪽은 앞 트랜잭션이 끝날 때까지 대기 후 판정(커밋이면 0, 롤백이면 1)
+     * 예외 대신 영향 행 수로 판정해 트랜잭션을 깨지 않음(callback_log와 같은 방식)
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            insert into orders (order_no, user_id, plan_id, sim_type, amount, currency, travel_start_date, status,
+                                created_at, expires_at, issued_at, idempotency_key)
+            values (:orderNo, :userId, :planId, :simType, :amount, :currency, :travelStartDate, :status,
+                    :createdAt, :expiresAt, :issuedAt, :idempotencyKey)
+            on conflict (user_id, idempotency_key) where idempotency_key is not null do nothing
+            """, nativeQuery = true)
+    int insertIfKeyAbsent(@Param("orderNo") String orderNo, @Param("userId") String userId,
+                          @Param("planId") Long planId, @Param("simType") String simType,
+                          @Param("amount") long amount, @Param("currency") String currency,
+                          @Param("travelStartDate") LocalDate travelStartDate, @Param("status") String status,
+                          @Param("createdAt") Instant createdAt, @Param("expiresAt") Instant expiresAt,
+                          @Param("issuedAt") Instant issuedAt, @Param("idempotencyKey") String idempotencyKey);
 
     // idx_orders_status_expires_at 인덱스 사용
     List<OrderJpaEntity> findByStatusAndExpiresAtLessThanEqualOrderByExpiresAtAsc(OrderStatus status, Instant now,

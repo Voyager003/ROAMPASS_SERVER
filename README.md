@@ -51,7 +51,8 @@ DB 스키마와 시드 데이터는 `roampass-api` 기동 시 Flyway가 자동�
 curl 'localhost:8080/api/plans?country=JP&simType=ESIM'
 
 # 주문 생성 → 201 + Location, 10분 안에 결제하지 않으면 EXPIRED
-curl -i -X POST localhost:8080/api/orders -H 'X-User-Id: user-1' \
+# Idempotency-Key(선택): 같은 키로 다시 보내면 새 주문 없이 처음 주문을 그대로 돌려줌
+curl -i -X POST localhost:8080/api/orders -H 'X-User-Id: user-1' -H 'Idempotency-Key: 3f6c1a2e-7b7d-4c55-9f0e-1d2b3c4d5e6f' \
   -H 'Content-Type: application/json' -d '{"planId": 1, "travelStartDate": "2026-10-25"}'
 
 # 주문 조회 (남의 주문은 404)
@@ -294,6 +295,22 @@ stateDiagram-v2
 - **공급사가 접수는 했는데 우리 DB 저장이 실패하면**: 발급 요청은 `PENDING`으로 남고, 발급 스케줄러가 다음 주기에 **같은 멱등 키**로 다시 요청합니다. 공급사는 같은 키에 처음 접수 번호를 그대로 돌려주므로 발급이 두 번 일어나지 않습니다. 그 사이 콜백이 먼저 와도 본문의 주문번호로 요청을 찾아 완료합니다. 끝내 결과가 없으면 2분 뒤 실패 처리되고 자동 환불로 이어집니다.
 - **환불(PG 취소) 재시도**: 취소 키가 환불 요청마다 고정이라, 타임아웃으로 결과를 몰라 다시 보내도 PG가 한 번만 취소합니다. 결과 반영은 "PENDING이고 시도 횟수가 그대로일 때만" 조건부로 저장해 같은 결과가 두 번 반영되지 않습니다.
 - **타임아웃(결과를 모름)**: 결제를 `REQUESTED`로 두고 응답에도 그대로 알려 줍니다. 이후 웹훅이나 상태 조회(멱등 키로 조회)로 확정합니다. PG의 4xx는 거절이 확실하므로 `FAILED`, 5xx·타임아웃은 처리 여부를 알 수 없으므로 `REQUESTED` 유지입니다.
+
+**주문 생성 재전송을 막는 키**
+
+결제·환불·운영자 조치는 대상 주문이 이미 있어 주문 상태(조건부 UPDATE)로 중복을 막지만, 주문 생성은 아직 대상이 없습니다. 그래서 주문 생성만 클라이언트가 만든 멱등 키를 받습니다.
+
+| 상황 | 키 없이 | `Idempotency-Key` 사용 |
+|---|---|---|
+| 같은 화면에서 연타 | 주문 2건(프론트 버튼 비활성화로만 방어) | 같은 주문 1건 |
+| 서버가 주문을 커밋한 직후 죽어 응답 유실 → 재시도 | 주문 2건 | 같은 주문 1건(처음과 같은 201·같은 주문번호) |
+| 같은 키로 다른 요금제·여행 시작일 | – | 409 `IDEMPOTENCY_KEY_REUSED` |
+
+- **키는 클라이언트가 첫 전송 전에 만듭니다.** 서버가 요청마다 만들면 재전송과 새 주문을 구분할 수 없습니다. 제출용 프론트는 주문 폼을 렌더할 때 키를 만들어 폼에 넣으므로, 브라우저가 다시 제출해도 같은 키가 갑니다.
+- **키와 주문은 같은 행·같은 트랜잭션에 저장합니다**(`orders.idempotency_key`, `(user_id, idempotency_key)` 부분 UNIQUE). 키를 메모리나 별도 저장소에 두면 그 사이에서 서버가 죽을 때 "주문은 있는데 키는 없음"이 되어 다시 중복이 생깁니다.
+- **동시 재전송**은 `INSERT ... ON CONFLICT DO NOTHING`(수신 기록과 같은 방식)으로 한쪽만 저장되고, 나머지는 저장된 주문을 읽어 돌려줍니다. 예외가 아니라 영향 행 수로 판정해 트랜잭션이 깨지지 않습니다.
+- 증명: `e2e/OrderIdempotencyConcurrencyTest` — 같은 키로 8개 동시 요청 → 모두 같은 주문번호, 주문 1건, 생성 이력 1건.
+- 키는 선택입니다. 헤더 없는 호출(curl·기존 테스트)은 이전처럼 매번 새 주문입니다.
 
 **결제 버튼 연타 · 타임아웃 후 재시도를 막는 키**
 
@@ -551,6 +568,7 @@ erDiagram
         TIMESTAMPTZ created_at
         TIMESTAMPTZ expires_at
         TIMESTAMPTZ issued_at
+        VARCHAR idempotency_key
     }
     status_history {
         BIGSERIAL id PK
@@ -630,7 +648,8 @@ erDiagram
 | 인덱스 | 쓰는 곳 |
 |---|---|
 | `orders(status, expires_at)` | 만료 스케줄러: `PENDING`이면서 만료 시각이 지난 주문 |
-| `orders(user_id, created_at)` | 내 주문 목록 |
+| `orders(user_id, created_at)` | 내 SIM 목록 |
+| `orders(user_id, idempotency_key)` 부분 UNIQUE (`idempotency_key IS NOT NULL`) | 주문 생성 재전송을 같은 주문으로 판정 |
 | `status_history(order_no, occurred_at, id)` | 어드민 주문 타임라인 |
 | `payment(idempotency_key)` UNIQUE | 결제 시도 1건 = 키 1개, 동시 결제 요청 중 하나만 저장 |
 | `payment(order_no)` 부분 UNIQUE (`status IN ('APPROVED','PARTIALLY_CANCELLED','CANCELLED')`) | 주문당 승인된 결제 최대 1건 |

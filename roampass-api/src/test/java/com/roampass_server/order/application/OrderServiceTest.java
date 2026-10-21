@@ -7,12 +7,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import com.roampass_server.common.application.exception.ConflictException;
 import com.roampass_server.common.application.exception.NotFoundException;
 import com.roampass_server.common.domain.Actor;
 import com.roampass_server.common.domain.Money;
@@ -24,6 +26,7 @@ import com.roampass_server.history.application.FakeStatusHistoryRepository;
 import com.roampass_server.history.application.StatusHistoryRecorder;
 import com.roampass_server.history.domain.model.HistoryTarget;
 import com.roampass_server.history.domain.model.StatusHistory;
+import com.roampass_server.order.domain.model.OrderIdempotencyKey;
 import com.roampass_server.order.domain.model.OrderStatus;
 import com.roampass_server.plan.application.FakePlanRepository;
 import com.roampass_server.plan.application.PlanQueryService;
@@ -120,6 +123,82 @@ class OrderServiceTest {
                     .extracting("code").isEqualTo("INVALID_TRAVEL_START_DATE");
             assertThat(orderRepository.count()).isZero();
             assertThat(historyRepository.all()).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("멱등 키로 주문을 만들면")
+    class CreateOrderWithIdempotencyKey {
+
+        private static final OrderIdempotencyKey KEY = OrderIdempotencyKey.of("3f6c1a2e-7b7d-4c55-9f0e-1d2b3c4d5e6f");
+
+        private final AtomicInteger sequence = new AtomicInteger();
+        private OrderService sequentialService;
+
+        @BeforeEach
+        void setUpSequentialOrderNo() {
+            sequentialService = new OrderService(
+                    orderRepository,
+                    now -> OrderNo.of("ORD-20261020-SEQ%05d".formatted(sequence.incrementAndGet())),
+                    new PlanQueryService(new FakePlanRepository().add(JP_ESIM)),
+                    new StatusHistoryRecorder(historyRepository),
+                    clock,
+                    PAYMENT_WINDOW);
+        }
+
+        @Test
+        @DisplayName("같은 키로 다시 보내면 새 주문 없이 처음 주문을 그대로 돌려주고, 이력도 1건뿐이다")
+        void same_key_replays_first_order() {
+            // given
+            OrderResult first = sequentialService.createOrder(USER, 1L, TRAVEL_DATE, KEY);
+            clock.advance(Duration.ofSeconds(5));
+
+            // when
+            OrderResult retried = sequentialService.createOrder(USER, 1L, TRAVEL_DATE, KEY);
+
+            // then
+            assertThat(retried.orderNo()).isEqualTo(first.orderNo());
+            assertThat(retried.createdAt()).isEqualTo(first.createdAt());
+            assertThat(orderRepository.count()).isEqualTo(1);
+            assertThat(historyRepository.findByOrderNo(first.orderNo())).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("같은 키로 다른 요금제·여행 시작일을 보내면 409 IDEMPOTENCY_KEY_REUSED")
+        void same_key_different_request() {
+            // given
+            sequentialService.createOrder(USER, 1L, TRAVEL_DATE, KEY);
+
+            // when // then
+            assertThatThrownBy(() -> sequentialService.createOrder(USER, 1L, TRAVEL_DATE.plusDays(1), KEY))
+                    .isInstanceOf(ConflictException.class)
+                    .hasFieldOrPropertyWithValue("code", "IDEMPOTENCY_KEY_REUSED");
+            assertThat(orderRepository.count()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("다른 사용자가 같은 키를 쓰면 별개 주문 (키는 사용자별)")
+        void same_key_other_user() {
+            // given
+            OrderResult mine = sequentialService.createOrder(USER, 1L, TRAVEL_DATE, KEY);
+
+            // when
+            OrderResult others = sequentialService.createOrder(UserId.of("user-2"), 1L, TRAVEL_DATE, KEY);
+
+            // then
+            assertThat(others.orderNo()).isNotEqualTo(mine.orderNo());
+            assertThat(orderRepository.count()).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("키 없이 두 번 보내면 주문 2건 (기존 동작)")
+        void without_key_creates_each_time() {
+            // when
+            sequentialService.createOrder(USER, 1L, TRAVEL_DATE, null);
+            sequentialService.createOrder(USER, 1L, TRAVEL_DATE, null);
+
+            // then
+            assertThat(orderRepository.count()).isEqualTo(2);
         }
     }
 

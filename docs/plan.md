@@ -127,6 +127,7 @@ P1의 `Plan`·`Order`·`StatusHistory` 위에 유스케이스·영속성·API를
 - [x] **P6-3** 사용자 환불 요청: `POST /api/orders/{orderNo}/refund`(202 REFUNDING), 직전 공급사 재조회, 조건부 UPDATE로 1회. 테스트: 같은 사용자 동시 8회 → 1회
 - [x] **P6-4** CORS: `/api/**`·`/admin/**`, 허용 주소 설정값(기본 `http://localhost:3000`)
 - [x] **P6-5** 문서: README **2.5** 사용자 줄, **2.6** 사용자 쪽(폴링과 이유, 대기 정보, 서버 판정), API 예시, 구조, 미구현, decisions #94~#98
+- [ ] **P6-6** 주문 생성 멱등 키: `V6` `orders.idempotency_key` + `(user_id, idempotency_key)` 부분 UNIQUE, `POST /api/orders` `Idempotency-Key`(선택), 같은 키 재전송은 처음 주문 반환·다른 내용은 409. 테스트: 같은 키 동시 8회 → 주문 1건 (decisions #99)
 - [ ] 프론트와 로컬 연동해 구매 흐름·내 SIM·어드민 화면 동작 확인(프론트 저장소, 사용자 확인)
 - [x] 결정: 상세 식별자는 주문번호, 사용자 환불은 발급 전 + 미설치 ISSUED, 발급 대기는 클라이언트 폴링
 - 완료 기준: 로컬에서 프론트의 사용자 화면과 어드민 화면이 모두 동작

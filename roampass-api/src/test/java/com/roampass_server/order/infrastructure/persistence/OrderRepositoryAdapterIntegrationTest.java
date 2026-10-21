@@ -21,6 +21,7 @@ import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.common.domain.UserId;
 import com.roampass_server.common.domain.SimType;
 import com.roampass_server.order.domain.model.Order;
+import com.roampass_server.order.domain.model.OrderIdempotencyKey;
 import com.roampass_server.order.domain.model.OrderStatus;
 import com.roampass_server.order.domain.repository.OrderRepository;
 import com.roampass_server.order.domain.repository.OrderSearchCondition;
@@ -207,6 +208,58 @@ class OrderRepositoryAdapterIntegrationTest {
                     .containsExactly("ORD-20261020-USER0002");
             assertThat(all.content()).extracting(o -> o.orderNo().value())
                     .containsExactly("ORD-20261020-USER0002", "ORD-20261020-USER0001");
+        }
+    }
+
+    @Nested
+    @DisplayName("멱등 키로 저장하면")
+    class InsertIfKeyAbsent {
+
+        private final OrderIdempotencyKey key = OrderIdempotencyKey.of("key-0001");
+
+        private Order keyedOrder(String suffix, UserId user) {
+            return Order.create(OrderNo.of("ORD-20261020-" + suffix), user, PersistenceTestFixtures.SEED_PLAN_1,
+                    PersistenceTestFixtures.TRAVEL_DATE, NOW, WINDOW, key);
+        }
+
+        @Test
+        @DisplayName("처음이면 저장되고 키로 다시 찾을 수 있다")
+        void inserts_and_finds_by_key() {
+            // when
+            boolean inserted = orderRepository.insertIfKeyAbsent(keyedOrder("KEY00001", PersistenceTestFixtures.USER));
+
+            // then
+            assertThat(inserted).isTrue();
+            assertThat(orderRepository.findByUserAndIdempotencyKey(PersistenceTestFixtures.USER, key))
+                    .hasValueSatisfying(o -> {
+                        assertThat(o.orderNo().value()).isEqualTo("ORD-20261020-KEY00001");
+                        assertThat(o.idempotencyKey()).isEqualTo(key);
+                        assertThat(o.status()).isEqualTo(OrderStatus.PENDING);
+                    });
+        }
+
+        @Test
+        @DisplayName("같은 사용자·같은 키가 이미 있으면 저장하지 않고 false (주문번호가 달라도)")
+        void skips_duplicate_key_for_same_user() {
+            // given
+            orderRepository.insertIfKeyAbsent(keyedOrder("KEY00001", PersistenceTestFixtures.USER));
+
+            // when
+            boolean inserted = orderRepository.insertIfKeyAbsent(keyedOrder("KEY00002", PersistenceTestFixtures.USER));
+
+            // then
+            assertThat(inserted).isFalse();
+            assertThat(orderRepository.findByOrderNo(OrderNo.of("ORD-20261020-KEY00002"))).isEmpty();
+        }
+
+        @Test
+        @DisplayName("다른 사용자는 같은 키로도 저장된다")
+        void same_key_other_user() {
+            // given
+            orderRepository.insertIfKeyAbsent(keyedOrder("KEY00001", PersistenceTestFixtures.USER));
+
+            // when // then
+            assertThat(orderRepository.insertIfKeyAbsent(keyedOrder("KEY00002", UserId.of("user-2")))).isTrue();
         }
     }
 }

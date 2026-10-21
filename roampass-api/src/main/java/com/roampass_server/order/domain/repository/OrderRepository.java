@@ -9,6 +9,7 @@ import com.roampass_server.common.domain.PageResult;
 import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.common.domain.UserId;
 import com.roampass_server.order.domain.model.Order;
+import com.roampass_server.order.domain.model.OrderIdempotencyKey;
 import com.roampass_server.order.domain.model.OrderStatus;
 
 /**
@@ -20,6 +21,16 @@ public interface OrderRepository {
     Order save(Order order);
 
     Optional<Order> findByOrderNo(OrderNo orderNo);
+
+    /**
+     * 멱등 키가 있는 새 주문 저장. 같은 사용자·같은 키의 주문이 이미 있으면 아무것도 하지 않음
+     * 같은 키로 동시에 저장하면 나중 쪽은 앞 트랜잭션이 끝날 때까지 기다린 뒤 판정(DB 유니크 제약)
+     *
+     * @return 저장 여부. false면 같은 키의 주문이 이미 있음({@link #findByUserAndIdempotencyKey}로 조회)
+     */
+    boolean insertIfKeyAbsent(Order order);
+
+    Optional<Order> findByUserAndIdempotencyKey(UserId userId, OrderIdempotencyKey key);
 
     /** PENDING이면서 만료 시각이 {@code now} 이전인 주문, 만료 시각 오름차순 최대 {@code limit}건 */
     List<Order> findExpirable(Instant now, int limit);

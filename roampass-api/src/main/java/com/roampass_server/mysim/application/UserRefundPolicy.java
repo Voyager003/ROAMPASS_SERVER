@@ -1,7 +1,11 @@
 package com.roampass_server.mysim.application;
 
+import java.util.EnumSet;
+import java.util.Set;
+
 import com.roampass_server.issuance.domain.model.SimProfile;
 import com.roampass_server.order.domain.model.Order;
+import com.roampass_server.order.domain.model.OrderStatus;
 
 /**
  * 사용자 환불 요청 허용 판정
@@ -14,15 +18,18 @@ import com.roampass_server.order.domain.model.Order;
  */
 public final class UserRefundPolicy {
 
+    /** 사용자 환불을 받는 주문 상태(ISSUED는 SIM 판정 추가) */
+    static final Set<OrderStatus> ALLOWED_STATUSES = EnumSet.of(OrderStatus.PAID, OrderStatus.PICKUP_READY,
+            OrderStatus.ISSUED);
+
     private UserRefundPolicy() {
     }
 
     /** @param profile 발급 전이면 {@code null} */
     public static boolean isRefundable(Order order, SimProfile profile) {
-        return switch (order.status()) {
-            case PAID, PICKUP_READY -> true;
-            case ISSUED -> profile != null && profile.isRefundable();
-            default -> false;
-        };
+        if (!ALLOWED_STATUSES.contains(order.status())) {
+            return false;
+        }
+        return order.status() != OrderStatus.ISSUED || (profile != null && profile.isRefundable());
     }
 }

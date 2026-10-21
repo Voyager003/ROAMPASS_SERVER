@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
@@ -166,6 +167,66 @@ class CommonWebLayerTest {
             // then
             assertThat(result).hasStatus(HttpStatus.NOT_FOUND)
                     .bodyJson().extractingPath("$.code").isEqualTo("NOT_FOUND");
+        }
+    }
+
+    @Nested
+    @DisplayName("CORS는")
+    class Cors {
+
+        private static final String FRONT = "http://localhost:3000";
+
+        @Test
+        @DisplayName("허용된 프론트 주소의 preflight에 인증 헤더 허용으로 응답한다")
+        void allows_preflight_from_front() {
+            // when
+            var result = mvc.options().uri("/api/test/me")
+                    .header(HttpHeaders.ORIGIN, FRONT)
+                    .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                    .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "X-User-Id")
+                    .exchange();
+
+            // then
+            assertThat(result).hasStatusOk()
+                    .hasHeader(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, FRONT);
+            assertThat(result.getResponse().getHeader(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS))
+                    .containsIgnoringCase("X-User-Id");
+        }
+
+        @Test
+        @DisplayName("어드민 API preflight는 X-Admin-Id 없이도 통과한다")
+        void allows_admin_preflight_without_header() {
+            // when
+            var result = mvc.options().uri("/admin/test/me")
+                    .header(HttpHeaders.ORIGIN, FRONT)
+                    .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                    .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "X-Admin-Id, Content-Type");
+
+            // then
+            assertThat(result).hasStatusOk()
+                    .hasHeader(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, FRONT);
+        }
+
+        @Test
+        @DisplayName("실제 요청 응답에도 허용 주소를 담는다")
+        void actual_request_has_allow_origin() {
+            // when
+            var result = mvc.get().uri("/api/test/me").header(HttpHeaders.ORIGIN, FRONT).header("X-User-Id", "user-1");
+
+            // then
+            assertThat(result).hasStatusOk().hasHeader(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, FRONT);
+        }
+
+        @Test
+        @DisplayName("허용되지 않은 주소면 403")
+        void rejects_unknown_origin() {
+            // when
+            var result = mvc.options().uri("/api/test/me")
+                    .header(HttpHeaders.ORIGIN, "http://evil.example")
+                    .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET");
+
+            // then
+            assertThat(result).hasStatus(HttpStatus.FORBIDDEN);
         }
     }
 }

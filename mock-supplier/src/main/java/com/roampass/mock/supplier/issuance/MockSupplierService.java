@@ -72,7 +72,7 @@ public class MockSupplierService {
      */
     public ProfileView activateUsim(String iccid, Instant now) {
         SupplierOrder order = byIccid.computeIfAbsent(iccid, id -> new SupplierOrder(newId("SUP-"), null, id, null));
-        return order.changeState(ProfileState.ENABLED, now);
+        return applyStateChange(order, ProfileState.ENABLED, now);
     }
 
     /** 시연용: 설치·개통·삭제를 흉내 내는 상태 변경 */
@@ -81,7 +81,26 @@ public class MockSupplierService {
         if (order == null) {
             throw new MockSupplierException(HttpStatus.NOT_FOUND, "PROFILE_NOT_FOUND", "Unknown ICCID");
         }
-        return order.changeState(state, now);
+        return applyStateChange(order, state, now);
+    }
+
+    private ProfileView applyStateChange(SupplierOrder order, ProfileState state, Instant now) {
+        SupplierOrder.StateChange change = order.changeState(state, now);
+        if (change.newlyActivated()) {
+            publishActivated(order, change.view());
+        }
+        return change.view();
+    }
+
+    /** 개통 이벤트 콜백(과제 2.3-④). 지연·중복·서명 오류는 발급 콜백과 같은 설정, 누락은 전체 누락 또는 개통만 누락 */
+    private void publishActivated(SupplierOrder order, ProfileView view) {
+        FaultSettings faults = faultConfig.current();
+        if (faults.callbackDrop() || faults.activationCallbackDrop()) {
+            return;
+        }
+        CallbackEvent event = new CallbackEvent(newId("sevt_"), CallbackEventType.ACTIVATED, order.supplierOrderNo(),
+                order.orderNo(), view.iccid(), null, null, view.activatedAt(), Instant.now());
+        deliver(new CallbackDelivery(event, !faults.invalidSignature()), faults);
     }
 
     private void publishCallbacks(SupplierOrder order, FaultSettings faults) {
@@ -90,10 +109,13 @@ public class MockSupplierService {
         }
         CallbackEvent event = order.issued()
                 ? new CallbackEvent(newId("sevt_"), CallbackEventType.ISSUED, order.supplierOrderNo(), order.orderNo(),
-                        order.iccid(), order.activationCode(), null, Instant.now())
+                        order.iccid(), order.activationCode(), null, null, Instant.now())
                 : new CallbackEvent(newId("sevt_"), CallbackEventType.ISSUE_FAILED, order.supplierOrderNo(),
-                        order.orderNo(), null, null, "INJECTED_ISSUE_FAILURE", Instant.now());
-        CallbackDelivery delivery = new CallbackDelivery(event, !faults.invalidSignature());
+                        order.orderNo(), null, null, "INJECTED_ISSUE_FAILURE", null, Instant.now());
+        deliver(new CallbackDelivery(event, !faults.invalidSignature()), faults);
+    }
+
+    private void deliver(CallbackDelivery delivery, FaultSettings faults) {
         for (int i = 0; i <= faults.callbackDuplicates(); i++) {
             callbackPublisher.publish(delivery); // 중복분도 같은 eventId
         }

@@ -7,9 +7,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "mock-supplier.faults")
 public record FaultProperties(double issueFailureRate, long callbackDelayMs, int callbackDuplicates,
-                              boolean callbackDrop, boolean invalidSignature) {
+                              boolean callbackDrop, boolean invalidSignature, boolean activationCallbackDrop) {
 
     public FaultSettings toSettings() {
-        return new FaultSettings(issueFailureRate, callbackDelayMs, callbackDuplicates, callbackDrop, invalidSignature);
+        return new FaultSettings(issueFailureRate, callbackDelayMs, callbackDuplicates, callbackDrop, invalidSignature,
+                activationCallbackDrop);
     }
 }

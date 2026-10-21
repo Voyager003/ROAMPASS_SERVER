@@ -52,6 +52,11 @@ public class FakeSimProfileRepository implements SimProfileRepository {
     }
 
     @Override
+    public synchronized Optional<SimProfile> findByIccid(Iccid iccid) {
+        return profiles.stream().filter(p -> p.iccid().equals(iccid)).findFirst();
+    }
+
+    @Override
     public synchronized List<SimProfile> findTrackable(LocalDate today, int lookaheadDays, int limit) {
         return profiles.stream()
                 .filter(p -> NOT_ACTIVATED.contains(p.status()) && p.deletedAt() == null)

@@ -27,6 +27,7 @@ import com.roampass_server.common.domain.UserId;
 import com.roampass_server.common.domain.exception.InvalidValueException;
 import com.roampass_server.order.application.OrderResult;
 import com.roampass_server.order.application.OrderService;
+import com.roampass_server.order.domain.model.OrderIdempotencyKey;
 import com.roampass_server.order.domain.model.OrderStatus;
 
 @WebMvcTest(controllers = OrderController.class)
@@ -57,7 +58,7 @@ class OrderControllerTest {
         @DisplayName("주문이 만들어지면 201, Location 헤더, 주문 정보를 돌려준다 (시각은 UTC ISO-8601)")
         void creates_order() {
             // given
-            given(orderService.createOrder(USER, 1L, LocalDate.of(2026, 10, 25))).willReturn(RESULT);
+            given(orderService.createOrder(USER, 1L, LocalDate.of(2026, 10, 25), null)).willReturn(RESULT);
 
             // when
             var result = mvc.post().uri("/api/orders").header("X-User-Id", "user-1")
@@ -71,6 +72,37 @@ class OrderControllerTest {
                              "amount":{"amount":9900,"currency":"KRW"},"travelStartDate":"2026-10-25",
                              "status":"PENDING","createdAt":"2026-10-20T03:00:00Z","expiresAt":"2026-10-20T03:10:00Z"}
                             """);
+        }
+
+        @Test
+        @DisplayName("Idempotency-Key 헤더가 있으면 키를 함께 넘긴다")
+        void passes_idempotency_key() {
+            // given
+            OrderIdempotencyKey key = OrderIdempotencyKey.of("3f6c1a2e-7b7d-4c55-9f0e-1d2b3c4d5e6f");
+            given(orderService.createOrder(USER, 1L, LocalDate.of(2026, 10, 25), key)).willReturn(RESULT);
+
+            // when
+            var result = mvc.post().uri("/api/orders").header("X-User-Id", "user-1")
+                    .header("Idempotency-Key", key.value())
+                    .contentType(MediaType.APPLICATION_JSON).content(validBody);
+
+            // then
+            assertThat(result).hasStatus(HttpStatus.CREATED)
+                    .bodyJson().extractingPath("$.orderNo").isEqualTo(ORDER_NO.value());
+        }
+
+        @Test
+        @DisplayName("Idempotency-Key 형식이 틀리면 400 INVALID_IDEMPOTENCY_KEY, 서비스를 호출하지 않는다")
+        void rejects_malformed_idempotency_key() {
+            // when
+            var result = mvc.post().uri("/api/orders").header("X-User-Id", "user-1")
+                    .header("Idempotency-Key", "has space")
+                    .contentType(MediaType.APPLICATION_JSON).content(validBody);
+
+            // then
+            assertThat(result).hasStatus(HttpStatus.BAD_REQUEST)
+                    .bodyJson().extractingPath("$.code").isEqualTo("INVALID_IDEMPOTENCY_KEY");
+            verifyNoInteractions(orderService);
         }
 
         @Test
@@ -118,7 +150,7 @@ class OrderControllerTest {
         @DisplayName("없는 요금제면 404 PLAN_NOT_FOUND")
         void unknown_plan() {
             // given
-            given(orderService.createOrder(eq(USER), eq(999L), any()))
+            given(orderService.createOrder(eq(USER), eq(999L), any(), any()))
                     .willThrow(new NotFoundException("PLAN_NOT_FOUND", "Plan not found"));
 
             // when
@@ -136,7 +168,7 @@ class OrderControllerTest {
         @DisplayName("여행 시작일 규칙을 어기면 도메인 코드 그대로 400 INVALID_TRAVEL_START_DATE")
         void invalid_travel_date() {
             // given
-            given(orderService.createOrder(eq(USER), eq(1L), any()))
+            given(orderService.createOrder(eq(USER), eq(1L), any(), any()))
                     .willThrow(new InvalidValueException("INVALID_TRAVEL_START_DATE", "out of range"));
 
             // when

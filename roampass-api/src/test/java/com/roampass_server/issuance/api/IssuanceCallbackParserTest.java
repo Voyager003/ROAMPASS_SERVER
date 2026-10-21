@@ -32,6 +32,21 @@ class IssuanceCallbackParserTest {
     }
 
     @Test
+    @DisplayName("개통 이벤트 콜백 본문(유심이면 주문번호 없음)의 개통 시각을 담는다")
+    void parses_activation() {
+        // when
+        IssuanceCallbackCommand command = parser.parse("""
+                {"eventId":"sevt_2","eventType":"ACTIVATED","supplierOrderNo":"SUP-2","orderNo":null,
+                 "iccid":"8982300912345678902","activationCode":null,"reason":null,
+                 "activatedAt":"2026-05-01T15:20:00Z","occurredAt":"2026-05-01T15:20:03Z"}
+                """);
+
+        // then
+        assertThat(command).isEqualTo(new IssuanceCallbackCommand("sevt_2", "ACTIVATED", "SUP-2", null,
+                "8982300912345678902", null, null, "2026-05-01T15:20:00Z"));
+    }
+
+    @Test
     @DisplayName("JSON이 아니면 400 INVALID_CALLBACK")
     void rejects_malformed() {
         // when // then

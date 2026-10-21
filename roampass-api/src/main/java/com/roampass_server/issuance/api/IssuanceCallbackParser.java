@@ -22,7 +22,7 @@ class IssuanceCallbackParser {
         try {
             Body body = jsonMapper.readValue(rawBody, Body.class);
             return new IssuanceCallbackCommand(body.eventId(), body.eventType(), body.supplierOrderNo(),
-                    body.orderNo(), body.iccid(), body.activationCode(), body.reason());
+                    body.orderNo(), body.iccid(), body.activationCode(), body.reason(), body.activatedAt());
         } catch (JacksonException e) {
             throw new InvalidValueException("INVALID_CALLBACK", "Callback body is not valid JSON");
         }
@@ -30,6 +30,6 @@ class IssuanceCallbackParser {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record Body(String eventId, String eventType, String supplierOrderNo, String orderNo, String iccid,
-                String activationCode, String reason) {
+                String activationCode, String reason, String activatedAt) {
     }
 }

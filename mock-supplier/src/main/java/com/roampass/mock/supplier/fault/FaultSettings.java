@@ -10,11 +10,12 @@ import com.roampass.mock.supplier.issuance.MockSupplierException;
  * @param issueFailureRate   발급 실패 확률(0~1), 실패면 접수 후 실패 콜백
  * @param callbackDelayMs    콜백 추가 지연(0~60000ms), 기본 지연에 더해짐
  * @param callbackDuplicates 같은 콜백(같은 eventId) 추가 발송 횟수(0~10)
- * @param callbackDrop       콜백 누락
+ * @param callbackDrop       콜백 누락(발급·개통 콜백 모두)
  * @param invalidSignature   틀린 비밀키로 서명
+ * @param activationCallbackDrop 개통 이벤트 콜백만 누락(과제 2.3-④ "콜백은 가끔 빠집니다", 폴링이 메우는지 시연)
  */
 public record FaultSettings(double issueFailureRate, long callbackDelayMs, int callbackDuplicates,
-                            boolean callbackDrop, boolean invalidSignature) {
+                            boolean callbackDrop, boolean invalidSignature, boolean activationCallbackDrop) {
 
     private static final long MAX_DELAY_MS = 60_000;
     private static final int MAX_DUPLICATES = 10;
@@ -31,8 +32,14 @@ public record FaultSettings(double issueFailureRate, long callbackDelayMs, int c
         }
     }
 
+    /** 개통 콜백 누락 없이 */
+    public FaultSettings(double issueFailureRate, long callbackDelayMs, int callbackDuplicates, boolean callbackDrop,
+                         boolean invalidSignature) {
+        this(issueFailureRate, callbackDelayMs, callbackDuplicates, callbackDrop, invalidSignature, false);
+    }
+
     public static FaultSettings none() {
-        return new FaultSettings(0, 0, 0, false, false);
+        return new FaultSettings(0, 0, 0, false, false, false);
     }
 
     private static MockSupplierException invalid(String message) {

@@ -66,11 +66,11 @@ public class IssuanceFixture {
     public final IssuanceDispatchService dispatch = new IssuanceDispatchService(orders, requests, start, acceptance, failure,
             supplier, 50);
     public final IssuanceTimeoutService timeout = new IssuanceTimeoutService(requests, failure, clock, CALLBACK_TIMEOUT, 50);
+    public final ProfileSignalApplier applier = new ProfileSignalApplier(profiles, recorder, clock);
     public final IssuanceCallbackService callbacks = new IssuanceCallbackService(signer, callbackLogs,
             new IssuanceCallbackProcessor(callbackLogs, requests, profiles, orders, planQuery, failure, recorder,
-                    clock), clock);
+                    applier, clock), clock);
 
-    public final ProfileSignalApplier applier = new ProfileSignalApplier(profiles, recorder, clock);
     public final ProfileTrackingService tracking = new ProfileTrackingService(profiles, supplier, applier, clock, 3, 100);
     public final QrViewService qrView = new QrViewService(orders, profiles, recorder, clock);
     public final UsimRegistrationService usim = new UsimRegistrationService(
@@ -120,6 +120,12 @@ public class IssuanceFixture {
     public IssuanceCallbackCommand issued(String eventId, String supplierOrderNo) {
         return new IssuanceCallbackCommand(eventId, "ISSUED", supplierOrderNo, ORDER_NO.value(), ICCID,
                 ACTIVATION_CODE, null);
+    }
+
+    /** 개통 이벤트 콜백(공급사 기준 개통 시각) */
+    public IssuanceCallbackCommand activated(String eventId, Instant activatedAt) {
+        return new IssuanceCallbackCommand(eventId, "ACTIVATED", null, null, ICCID, null, null,
+                activatedAt == null ? null : activatedAt.toString());
     }
 
     public IssuanceCallbackCommand issueFailed(String eventId, String supplierOrderNo) {

@@ -12,13 +12,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.roampass_server.admin.application.AdminOrderDetail;
 import com.roampass_server.admin.application.AdminOrderQueryService;
+import com.roampass_server.admin.application.AdminOrderSearchCondition;
 import com.roampass_server.admin.application.AdminOrderSummary;
 import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.common.domain.PageResult;
 import com.roampass_server.common.domain.SimType;
 import com.roampass_server.common.domain.exception.InvalidValueException;
+import com.roampass_server.issuance.domain.model.InstallStatus;
 import com.roampass_server.order.domain.model.OrderStatus;
-import com.roampass_server.order.domain.repository.OrderSearchCondition;
+import com.roampass_server.payment.domain.model.PaymentStatus;
 
 /**
  * 어드민 주문 조회 API. X-Admin-Id 필수(AdminAuthInterceptor)
@@ -40,6 +42,8 @@ public class AdminOrderController {
     @GetMapping
     public AdminResponse<PageResult<AdminOrderSummary>> search(
             @RequestParam(required = false) OrderStatus status,
+            @RequestParam(required = false) PaymentStatus paymentStatus,
+            @RequestParam(required = false) InstallStatus installStatus,
             @RequestParam(required = false) SimType simType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
@@ -50,7 +54,8 @@ public class AdminOrderController {
         }
         Instant asOf = Instant.now(clock);
         return new AdminResponse<>(asOf,
-                queryService.search(new OrderSearchCondition(status, simType, from, to), page, size));
+                queryService.search(new AdminOrderSearchCondition(status, paymentStatus, installStatus, simType, from, to),
+                        page, size));
     }
 
     @GetMapping("/{orderNo}")

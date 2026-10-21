@@ -4,6 +4,8 @@ import static com.roampass_server.issuance.application.IssuanceFixture.ORDER_NO;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Duration;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -16,8 +18,9 @@ import com.roampass_server.common.domain.SimType;
 import com.roampass_server.issuance.application.IssuanceFixture;
 import com.roampass_server.issuance.domain.model.InstallStatus;
 import com.roampass_server.issuance.domain.model.IssuanceStatus;
+import com.roampass_server.issuance.domain.service.SupplierProfileResult;
+import com.roampass_server.issuance.domain.service.SupplierProfileState;
 import com.roampass_server.order.domain.model.OrderStatus;
-import com.roampass_server.order.domain.repository.OrderSearchCondition;
 import com.roampass_server.payment.domain.model.PaymentStatus;
 import com.roampass_server.payment.domain.model.RefundStatus;
 
@@ -26,10 +29,11 @@ class AdminOrderQueryServiceTest {
 
     private final IssuanceFixture f = new IssuanceFixture();
     private final AdminOrderQueryService service = new AdminOrderQueryService(f.orders, f.payments, f.profiles,
-            f.requests, f.refunds, f.histories, f.callbackLogs);
+            f.requests, f.refunds, f.histories, f.callbackLogs,
+            new FakeAdminOrderSearch(f.orders, f.payments, f.profiles), f.clock);
 
-    private static OrderSearchCondition all() {
-        return new OrderSearchCondition(null, null, null, null);
+    private static AdminOrderSearchCondition all() {
+        return AdminOrderSearchCondition.all();
     }
 
     @Nested
@@ -71,12 +75,51 @@ class AdminOrderQueryServiceTest {
 
             // when
             PageResult<AdminOrderSummary> usim = service.search(
-                    new OrderSearchCondition(OrderStatus.PICKUP_READY, SimType.USIM, null, null), 0, 1);
+                    new AdminOrderSearchCondition(OrderStatus.PICKUP_READY, null, null, SimType.USIM, null, null), 0, 1);
 
             // then
             assertThat(usim.totalElements()).isEqualTo(2);
             assertThat(usim.content()).hasSize(1);
             assertThat(usim.content().getFirst().simType()).isEqualTo(SimType.USIM);
+        }
+
+        @Test
+        @DisplayName("결제 상태(최근 결제 시도)로 거른다: 결제 전 주문은 결제 상태 조건에 걸리지 않음")
+        void filters_by_payment_status() {
+            // given
+            f.issued(); // 결제 APPROVED
+            f.pickupReadyUsimOrder(OrderNo.of("ORD-20261021-USIM0001")); // 결제 기록 없음
+
+            // when
+            PageResult<AdminOrderSummary> approved = service.search(
+                    new AdminOrderSearchCondition(null, PaymentStatus.APPROVED, null, null, null, null), 0, 20);
+            PageResult<AdminOrderSummary> requested = service.search(
+                    new AdminOrderSearchCondition(null, PaymentStatus.REQUESTED, null, null, null, null), 0, 20);
+
+            // then
+            assertThat(approved.content()).extracting(AdminOrderSummary::orderNo).containsExactly(ORDER_NO.value());
+            assertThat(requested.content()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("설치 상태로 거르고, 사용 기간이 지난 개통 SIM은 EXPIRED로 보이고 걸린다")
+        void filters_by_install_status_with_expiry() {
+            // given
+            f.issued();
+            f.applier.apply(f.profiles.findByOrderNo(ORDER_NO).orElseThrow(),
+                    SupplierProfileResult.found(SupplierProfileState.ENABLED, IssuanceFixture.NOW, 0));
+            f.clock.advance(Duration.ofDays(6)); // 5일 요금제 → 만료
+
+            // when
+            PageResult<AdminOrderSummary> expired = service.search(
+                    new AdminOrderSearchCondition(null, null, InstallStatus.EXPIRED, null, null, null), 0, 20);
+            PageResult<AdminOrderSummary> active = service.search(
+                    new AdminOrderSearchCondition(null, null, InstallStatus.ACTIVE, null, null, null), 0, 20);
+
+            // then
+            assertThat(expired.content()).singleElement()
+                    .satisfies(s -> assertThat(s.installStatus()).isEqualTo(InstallStatus.EXPIRED));
+            assertThat(active.content()).isEmpty();
         }
     }
 

@@ -11,10 +11,11 @@ import java.util.Optional;
 import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.common.domain.PageResult;
 import com.roampass_server.common.domain.SimType;
+import com.roampass_server.common.domain.UserId;
 import com.roampass_server.order.domain.model.Order;
+import com.roampass_server.order.domain.model.OrderIdempotencyKey;
 import com.roampass_server.order.domain.model.OrderStatus;
 import com.roampass_server.order.domain.repository.OrderRepository;
-import com.roampass_server.order.domain.repository.OrderSearchCondition;
 
 /**
  * 테스트용 인메모리 OrderRepository. 주문번호를 키로 보관
@@ -38,6 +39,22 @@ public class FakeOrderRepository implements OrderRepository {
     }
 
     @Override
+    public synchronized boolean insertIfKeyAbsent(Order order) {
+        if (findByUserAndIdempotencyKey(order.userId(), order.idempotencyKey()).isPresent()) {
+            return false; // 실제 구현의 ON CONFLICT DO NOTHING에 대응
+        }
+        save(order);
+        return true;
+    }
+
+    @Override
+    public Optional<Order> findByUserAndIdempotencyKey(UserId userId, OrderIdempotencyKey key) {
+        return orders.values().stream()
+                .filter(o -> o.isOwnedBy(userId) && key.equals(o.idempotencyKey()))
+                .findFirst();
+    }
+
+    @Override
     public List<Order> findExpirable(Instant now, int limit) {
         return orders.values().stream()
                 .filter(o -> o.status() == OrderStatus.PENDING && !now.isBefore(o.expiresAt()))
@@ -47,12 +64,9 @@ public class FakeOrderRepository implements OrderRepository {
     }
 
     @Override
-    public PageResult<Order> search(OrderSearchCondition c, int page, int size) {
+    public PageResult<Order> findByUser(UserId userId, Collection<OrderStatus> statuses, int page, int size) {
         List<Order> matched = orders.values().stream()
-                .filter(o -> c.status() == null || o.status() == c.status())
-                .filter(o -> c.simType() == null || o.simType() == c.simType())
-                .filter(o -> c.createdFrom() == null || !o.createdAt().isBefore(c.createdFrom()))
-                .filter(o -> c.createdTo() == null || o.createdAt().isBefore(c.createdTo()))
+                .filter(o -> o.isOwnedBy(userId) && statuses.contains(o.status()))
                 .sorted(Comparator.comparing(Order::createdAt).reversed())
                 .toList();
         List<Order> content = matched.stream().skip((long) page * size).limit(size).toList();

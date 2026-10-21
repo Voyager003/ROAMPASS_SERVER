@@ -20,6 +20,9 @@ public interface SimProfileRepository {
 
     boolean existsByIccid(Iccid iccid);
 
+    /** 개통 이벤트 콜백 대상 찾기(유심 개통 콜백은 우리 주문번호 없이 ICCID만 옴) */
+    Optional<SimProfile> findByIccid(Iccid iccid);
+
     /**
      * 설치 추적 폴링 대상: 아직 개통 전(ISSUED·QR_VIEWED·INSTALLED)이고 삭제되지 않았으며,
      * 여행 시작일이 {@code today + lookaheadDays} 이전이고 시작일 + 사용 일수가 {@code today} 이후인 프로필

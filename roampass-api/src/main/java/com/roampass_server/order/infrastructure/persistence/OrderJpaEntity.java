@@ -9,6 +9,7 @@ import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.common.domain.SimType;
 import com.roampass_server.common.domain.UserId;
 import com.roampass_server.order.domain.model.Order;
+import com.roampass_server.order.domain.model.OrderIdempotencyKey;
 import com.roampass_server.order.domain.model.OrderStatus;
 
 import jakarta.persistence.Column;
@@ -73,6 +74,9 @@ public class OrderJpaEntity {
     @Column(name = "issued_at")
     private Instant issuedAt;
 
+    @Column(name = "idempotency_key", updatable = false)
+    private String idempotencyKey;
+
     private OrderJpaEntity(Order order) {
         this.id = order.id();
         this.orderNo = order.orderNo().value();
@@ -86,6 +90,7 @@ public class OrderJpaEntity {
         this.createdAt = order.createdAt();
         this.expiresAt = order.expiresAt();
         this.issuedAt = order.issuedAt();
+        this.idempotencyKey = order.idempotencyKey() == null ? null : order.idempotencyKey().value();
     }
 
     static OrderJpaEntity fromDomain(Order order) {
@@ -94,6 +99,7 @@ public class OrderJpaEntity {
 
     Order toDomain() {
         return Order.restore(id, OrderNo.of(orderNo), UserId.of(userId), planId, simType, Money.of(amount, currency),
-                travelStartDate, status, createdAt, expiresAt, issuedAt);
+                travelStartDate, status, createdAt, expiresAt, issuedAt,
+                idempotencyKey == null ? null : OrderIdempotencyKey.of(idempotencyKey));
     }
 }

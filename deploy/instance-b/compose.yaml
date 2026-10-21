@@ -1,0 +1,23 @@
+# 인스턴스 B(비공개): mock-pg + mock-supplier. 포트는 VCN 안에서만 열고 외부에는 열지 않음(decisions #105)
+# 장애 주입은 인스턴스 B에 SSH로 들어가 curl localhost:8081/mock/pg/config ... 로 함
+services:
+  mock-pg:
+    image: ghcr.io/${IMAGE_OWNER:?.env 필요}/mock-pg:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      # 인스턴스 A의 사설 IP로 웹훅 전송
+      PG_WEBHOOK_URL: http://${INSTANCE_A_PRIVATE_IP:?.env 필요}:8080/api/payments/webhook
+      PG_WEBHOOK_SECRET: ${PG_WEBHOOK_SECRET:?.env 필요}
+      JAVA_OPTS: -Xms64m -Xmx256m
+    ports:
+      - '8081:8081'
+
+  mock-supplier:
+    image: ghcr.io/${IMAGE_OWNER}/mock-supplier:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      SUPPLIER_CALLBACK_URL: http://${INSTANCE_A_PRIVATE_IP}:8080/api/issuance/callback
+      SUPPLIER_CALLBACK_SECRET: ${SUPPLIER_CALLBACK_SECRET:?.env 필요}
+      JAVA_OPTS: -Xms64m -Xmx256m
+    ports:
+      - '8082:8082'

@@ -138,9 +138,9 @@ P1의 `Plan`·`Order`·`StatusHistory` 위에 유스케이스·영속성·API를
 
 - [x] **P7-1** 이미지: 루트 `Dockerfile` 하나를 `MODULE` 인자로 세 앱에 공용(멀티스테이지, Docker 안에서 Gradle `bootJar` → JRE 이미지, root 아닌 사용자, `JAVA_OPTS` 기본 `-XX:MaxRAMPercentage=75`), `.dockerignore` (decisions #104)
 - [x] **P7-2** 로컬 전체 기동: `compose.yaml`에 `app` profile로 api·mock-pg·mock-supplier 추가(서비스 이름으로 연결, api는 `prod` 프로필 + 환경변수, postgres health 확인 후 api 시작). `docker compose up -d`는 지금처럼 DB만. README 실행 방법 갱신
-- [ ] **P7-3** 프론트(`roampass`)와 연동 확인: 구매 흐름·내 SIM·어드민 화면, 장애 주입(P6에서 이동, 프론트 F1-11과 같은 확인). 발견한 차이 수정
-- [ ] **P7-4** `linux/amd64` 이미지 빌드 → 레지스트리 push
-- [ ] **P7-5** Oracle Always Free AMD Micro 2대: A = `roampass-api` + postgres, B = `mock-pg` + `mock-supplier`. 스왑, Docker, VCN 보안 규칙(A↔B 사설 IP), 인스턴스별 compose(`deploy/`), 외부 공개 범위(미결 7)
+- [x] **P7-3** 프론트(`roampass`)와 연동 확인: 구매 흐름·내 SIM·어드민 화면, 장애 주입(P6에서 이동, 프론트 F1-11과 같은 확인). 발견한 차이 수정
+- [x] **P7-4** 배포 파이프라인(GitHub Actions): PR은 `ci.yml`(테스트), main merge·수동 실행은 `deploy.yml`(테스트 → `linux/amd64` 이미지 3개 GHCR push → SSH로 인스턴스 B·A 순서 배포 → health 확인). 인스턴스별 compose `deploy/instance-a`·`deploy/instance-b` + `.env.example` (decisions #105)
+- [ ] **P7-5** Oracle Always Free AMD Micro 2대(사용자 작업): A = `roampass-api` + postgres(8080 공개), B = `mock-pg` + `mock-supplier`(비공개, 미결 7 → decisions #105). 스왑, Docker, VCN 보안 규칙(A↔B 사설 IP), 서버 `.env`, 저장소 secrets, GHCR 패키지 공개
 - [ ] **P7-6** 배포 환경에서 결제 → 웹훅 → 발급 → 콜백 왕복 확인, 프론트 배포(Vercel, 프론트 F2)와 연결
 - [ ] **P7-7** README **배포** 절(어디에·왜·콜백 주소·막혔던 지점), **2.1** 호스팅 선택 이유, 부록 B 배포 항목 체크
 - 완료 기준: 공개 URL로 사용자·어드민 화면 접속, 배포 환경에서 장애 주입 시연 가능
@@ -187,4 +187,4 @@ EXPIRED            PICKUP_READY ──ICCID 등록──▶ ACTIVE   ISSUE_FAILE
 | 4 | 승인 실패 후 같은 주문 재결제 허용 여부(멱등 키 설계에 영향) | P1 — **결정됨**: PENDING 유지·재결제 허용, 승인 결제는 주문당 최대 1건 (decisions #38) |
 | 5 | 프로필 `DELETED`와 설치 상태 역행 금지의 조화 | P1 — **결정됨**: 상태 유지 + `deletedAt` 기록 (decisions #50) |
 | 6 | api 테스트의 외부 호출 대역 방식 | P3 — **결정됨**: 유스케이스·E2E는 Fake `PgClient` 빈, HTTP 어댑터는 `MockRestServiceServer` |
-| 7 | 인스턴스 B 공개 범위: 시연용 장애 주입 설정을 외부에 열지, 어떻게 보호할지 | P7 |
+| 7 | ~~인스턴스 B 공개 범위~~ → 비공개(decisions #105) | P7 |

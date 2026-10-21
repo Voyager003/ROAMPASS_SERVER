@@ -23,6 +23,8 @@ import com.roampass_server.issuance.domain.model.Iccid;
 import com.roampass_server.issuance.domain.model.InstallStatus;
 import com.roampass_server.issuance.domain.service.SupplierProfileResult;
 import com.roampass_server.issuance.domain.service.SupplierProfileState;
+import com.roampass_server.mysim.application.IssuanceWaiting.Action;
+import com.roampass_server.mysim.application.IssuanceWaiting.Stage;
 import com.roampass_server.order.domain.model.Order;
 import com.roampass_server.order.domain.model.OrderStatus;
 import com.roampass_server.order.domain.model.PlanSnapshot;
@@ -33,7 +35,8 @@ class MySimQueryServiceTest {
     private static final UserId USER = UserId.of("user-1");
 
     private final IssuanceFixture f = new IssuanceFixture();
-    private final MySimQueryService service = new MySimQueryService(f.orders, f.profiles, f.clock);
+    private final MySimQueryService service = new MySimQueryService(f.orders, f.profiles, f.requests, f.clock,
+            IssuanceFixture.CALLBACK_TIMEOUT);
 
     private Order pendingOrder(String orderNo, UserId owner) {
         return f.orders.save(Order.create(OrderNo.of(orderNo), owner, PlanSnapshot.of(1L, SimType.ESIM,
@@ -200,6 +203,70 @@ class MySimQueryServiceTest {
             assertThatThrownBy(() -> service.detail(UserId.of("user-2"), ORDER_NO))
                     .isInstanceOf(NotFoundException.class)
                     .hasFieldOrPropertyWithValue("code", "ORDER_NOT_FOUND");
+        }
+    }
+
+    @Nested
+    @DisplayName("발급 대기 정보는")
+    class Waiting {
+
+        @Test
+        @DisplayName("공급사 요청 전(PAID)이면 QUEUED, 기다리기·나중에 확인·환불 요청이 가능")
+        void queued() {
+            // given
+            f.paidEsimOrder();
+
+            // when
+            IssuanceWaiting waiting = service.detail(USER, ORDER_NO).waiting();
+
+            // then
+            assertThat(waiting.stage()).isEqualTo(Stage.QUEUED);
+            assertThat(waiting.requestedAt()).isNull();
+            assertThat(waiting.resultDeadline()).isNull();
+            assertThat(waiting.pollIntervalSeconds()).isEqualTo(MySimQueryService.POLL_INTERVAL_SECONDS);
+            assertThat(waiting.actions()).containsExactly(Action.WAIT, Action.CHECK_LATER, Action.REQUEST_REFUND);
+        }
+
+        @Test
+        @DisplayName("공급사 처리 중이면 REQUESTED, 결과 대기 한도(요청 + 2분)를 주고 환불 요청은 없음")
+        void requested() {
+            // given
+            f.dispatched();
+            f.clock.advance(Duration.ofSeconds(30));
+
+            // when
+            IssuanceWaiting waiting = service.detail(USER, ORDER_NO).waiting();
+
+            // then
+            assertThat(waiting.stage()).isEqualTo(Stage.REQUESTED);
+            assertThat(waiting.requestedAt()).isEqualTo(NOW);
+            assertThat(waiting.resultDeadline()).isEqualTo(NOW.plus(IssuanceFixture.CALLBACK_TIMEOUT));
+            assertThat(waiting.overdue()).isFalse();
+            assertThat(waiting.actions()).containsExactly(Action.WAIT, Action.CHECK_LATER);
+        }
+
+        @Test
+        @DisplayName("결과 대기 한도를 넘기면 overdue (서버가 곧 실패 처리 후 자동 환불)")
+        void overdue() {
+            // given
+            f.dispatched();
+            f.clock.advance(Duration.ofMinutes(3));
+
+            // when // then
+            assertThat(service.detail(USER, ORDER_NO).waiting().overdue()).isTrue();
+        }
+
+        @Test
+        @DisplayName("발급이 끝났거나 유심 수령 대기면 없음")
+        void none_after_issue_or_for_usim() {
+            // given
+            f.issued();
+            OrderNo usim = OrderNo.of("ORD-20261021-USIM0001");
+            f.pickupReadyUsimOrder(usim);
+
+            // when // then
+            assertThat(service.detail(USER, ORDER_NO).waiting()).isNull();
+            assertThat(service.detail(USER, usim).waiting()).isNull();
         }
     }
 }

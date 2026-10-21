@@ -15,10 +15,11 @@ import com.roampass_server.order.domain.model.OrderStatus;
  * @param amount     결제 금액(주문 시점 요금제 가격)
  * @param refundable 지금 사용자 환불 요청이 가능한지({@link UserRefundPolicy})
  * @param sim        발급 전이면 null
+ * @param waiting    발급 대기 정보, 이심 결제 후 발급 전(PAID·ISSUE_REQUESTED)에만 있음
  */
 public record MySimDetail(String orderNo, Long planId, SimType simType, Money amount, LocalDate travelStartDate,
                           OrderStatus orderStatus, Instant createdAt, Instant issuedAt, boolean refundable,
-                          SimInfo sim) {
+                          SimInfo sim, IssuanceWaiting waiting) {
 
     /**
      * 발급된 SIM 정보

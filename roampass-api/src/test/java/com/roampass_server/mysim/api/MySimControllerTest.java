@@ -78,7 +78,7 @@ class MySimControllerTest {
         // given
         given(queryService.detail(USER, ORDER_NO)).willReturn(new MySimDetail(ORDER_NO.value(), 1L, SimType.ESIM,
                 Money.krw(9_900), LocalDate.of(2026, 10, 25), OrderStatus.PAID,
-                Instant.parse("2026-10-21T00:00:00Z"), null, true, null));
+                Instant.parse("2026-10-21T00:00:00Z"), null, true, null, null));
 
         // when
         var result = mvc.get().uri("/api/sims/ORD-20261021-AAAA1111").header("X-User-Id", "user-1");

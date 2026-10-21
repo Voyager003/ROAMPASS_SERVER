@@ -7,6 +7,7 @@ import java.util.Optional;
 
 import com.roampass_server.common.domain.PageResult;
 import com.roampass_server.common.domain.OrderNo;
+import com.roampass_server.common.domain.UserId;
 import com.roampass_server.order.domain.model.Order;
 import com.roampass_server.order.domain.model.OrderStatus;
 
@@ -31,6 +32,9 @@ public interface OrderRepository {
 
     /** 어드민 주문 검색, 생성 시각 내림차순(최신 먼저) */
     PageResult<Order> search(OrderSearchCondition condition, int page, int size);
+
+    /** 사용자 본인의 주문 중 주어진 상태인 것, 생성 시각 내림차순(최신 먼저) */
+    PageResult<Order> findByUser(UserId userId, Collection<OrderStatus> statuses, int page, int size);
 
     /**
      * 저장된 상태가 아직 {@code expected}일 때만 주문의 변경을 저장(조건부 UPDATE)

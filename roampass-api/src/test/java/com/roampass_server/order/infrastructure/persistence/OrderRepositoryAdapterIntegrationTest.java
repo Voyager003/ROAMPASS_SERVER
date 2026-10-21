@@ -6,6 +6,7 @@ import static com.roampass_server.support.PersistenceTestFixtures.pendingOrder;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.EnumSet;
 import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +17,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.roampass_server.common.domain.Money;
+import com.roampass_server.common.domain.OrderNo;
+import com.roampass_server.common.domain.UserId;
 import com.roampass_server.common.domain.SimType;
 import com.roampass_server.order.domain.model.Order;
 import com.roampass_server.order.domain.model.OrderStatus;
@@ -174,6 +177,36 @@ class OrderRepositoryAdapterIntegrationTest {
                     .containsExactly("ORD-20261020-SRCH0002");
             assertThat(all.content()).extracting(o -> o.orderNo().value())
                     .containsExactly("ORD-20261020-SRCH0002", "ORD-20261020-SRCH0001");
+        }
+    }
+
+    @Nested
+    @DisplayName("사용자별 조회는")
+    class FindByUser {
+
+        @Test
+        @DisplayName("본인 주문 중 주어진 상태인 것만 최신순으로 페이지를 나눈다")
+        void filters_by_owner_and_status() {
+            // given
+            Order first = orderRepository.save(pendingOrder("USER0001", NOW));
+            orderRepository.saveIfStatus(first.confirmPayment(NOW), OrderStatus.PENDING);
+            Order second = orderRepository.save(pendingOrder("USER0002", NOW.plusSeconds(60)));
+            orderRepository.saveIfStatus(second.confirmPayment(NOW.plusSeconds(60)), OrderStatus.PENDING);
+            orderRepository.save(pendingOrder("USER0003", NOW.plusSeconds(120))); // 결제 대기
+            Order others = orderRepository.save(Order.create(OrderNo.of("ORD-20261020-OTHR0001"), UserId.of("user-2"),
+                    PersistenceTestFixtures.SEED_PLAN_1, PersistenceTestFixtures.TRAVEL_DATE, NOW, WINDOW));
+            orderRepository.saveIfStatus(others.confirmPayment(NOW), OrderStatus.PENDING);
+
+            // when
+            var firstPage = orderRepository.findByUser(PersistenceTestFixtures.USER, EnumSet.of(OrderStatus.PAID), 0, 1);
+            var all = orderRepository.findByUser(PersistenceTestFixtures.USER, EnumSet.of(OrderStatus.PAID), 0, 10);
+
+            // then
+            assertThat(firstPage.totalElements()).isEqualTo(2);
+            assertThat(firstPage.content()).extracting(o -> o.orderNo().value())
+                    .containsExactly("ORD-20261020-USER0002");
+            assertThat(all.content()).extracting(o -> o.orderNo().value())
+                    .containsExactly("ORD-20261020-USER0002", "ORD-20261020-USER0001");
         }
     }
 }

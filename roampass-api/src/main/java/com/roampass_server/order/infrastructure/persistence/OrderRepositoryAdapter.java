@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.roampass_server.common.domain.PageResult;
 import com.roampass_server.common.domain.OrderNo;
+import com.roampass_server.common.domain.UserId;
 import com.roampass_server.order.domain.model.Order;
 import com.roampass_server.common.domain.SimType;
 import com.roampass_server.order.domain.model.OrderStatus;
@@ -66,6 +67,14 @@ class OrderRepositoryAdapter implements OrderRepository {
             spec = spec.and((root, query, cb) -> cb.lessThan(root.get("createdAt"), condition.createdTo()));
         }
         Page<OrderJpaEntity> result = jpaRepository.findAll(spec,
+                PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))));
+        return new PageResult<>(result.getContent().stream().map(OrderJpaEntity::toDomain).toList(), page, size,
+                result.getTotalElements());
+    }
+
+    @Override
+    public PageResult<Order> findByUser(UserId userId, Collection<OrderStatus> statuses, int page, int size) {
+        Page<OrderJpaEntity> result = jpaRepository.findByUserIdAndStatusIn(userId.value(), statuses,
                 PageRequest.of(page, size, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))));
         return new PageResult<>(result.getContent().stream().map(OrderJpaEntity::toDomain).toList(), page, size,
                 result.getTotalElements());

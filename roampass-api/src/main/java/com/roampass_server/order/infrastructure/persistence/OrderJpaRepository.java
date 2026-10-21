@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -25,6 +26,9 @@ interface OrderJpaRepository extends JpaRepository<OrderJpaEntity, Long>, JpaSpe
 
     List<OrderJpaEntity> findByStatusInOrderByCreatedAtAsc(Collection<OrderStatus> statuses,
                                                            Pageable pageable);
+
+    // 내 SIM 목록, idx_orders_user_created_at 인덱스 사용
+    Page<OrderJpaEntity> findByUserIdAndStatusIn(String userId, Collection<OrderStatus> statuses, Pageable pageable);
 
     // 발급 요청 대상(PAID 이심), 오래된 순
     List<OrderJpaEntity> findByStatusAndSimTypeOrderByCreatedAtAsc(OrderStatus status,

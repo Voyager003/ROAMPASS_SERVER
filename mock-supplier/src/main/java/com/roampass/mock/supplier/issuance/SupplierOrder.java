@@ -43,12 +43,17 @@ class SupplierOrder {
         return iccid != null;
     }
 
-    synchronized ProfileView changeState(ProfileState next, Instant now) {
+    /** 상태 변경. 처음 ENABLED가 된 순간(개통)인지 함께 돌려줌 → 개통 이벤트 콜백은 그때 1번만 */
+    synchronized StateChange changeState(ProfileState next, Instant now) {
         state = next;
-        if (next == ProfileState.ENABLED && activatedAt == null) {
+        boolean newlyActivated = next == ProfileState.ENABLED && activatedAt == null;
+        if (newlyActivated) {
             activatedAt = now;
         }
-        return view();
+        return new StateChange(view(), newlyActivated);
+    }
+
+    record StateChange(ProfileView view, boolean newlyActivated) {
     }
 
     synchronized ProfileView view() {

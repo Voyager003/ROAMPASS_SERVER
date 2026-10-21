@@ -2,6 +2,7 @@ package com.roampass_server.issuance.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +25,8 @@ import com.roampass_server.issuance.domain.model.SimProfile;
 import com.roampass_server.issuance.domain.model.SupplierOrderNo;
 import com.roampass_server.issuance.domain.repository.IssuanceRequestRepository;
 import com.roampass_server.issuance.domain.repository.SimProfileRepository;
+import com.roampass_server.issuance.domain.service.SupplierProfileResult;
+import com.roampass_server.issuance.domain.service.SupplierProfileState;
 import com.roampass_server.order.domain.model.Order;
 import com.roampass_server.order.domain.model.OrderStatus;
 import com.roampass_server.order.domain.repository.OrderRepository;
@@ -41,6 +44,7 @@ public class IssuanceCallbackProcessor {
 
     static final String ISSUED = "ISSUED";
     static final String ISSUE_FAILED = "ISSUE_FAILED";
+    static final String ACTIVATED = "ACTIVATED";
     private static final int ATTEMPTS = 3;
 
     private final CallbackLogRepository callbackLogRepository;
@@ -50,13 +54,15 @@ public class IssuanceCallbackProcessor {
     private final PlanQueryService planQueryService;
     private final IssuanceFailureService failureService;
     private final StatusHistoryRecorder historyRecorder;
+    private final ProfileSignalApplier profileSignalApplier;
     private final Clock clock;
 
     public IssuanceCallbackProcessor(CallbackLogRepository callbackLogRepository,
                                      IssuanceRequestRepository requestRepository,
                                      SimProfileRepository profileRepository, OrderRepository orderRepository,
                                      PlanQueryService planQueryService, IssuanceFailureService failureService,
-                                     StatusHistoryRecorder historyRecorder, Clock clock) {
+                                     StatusHistoryRecorder historyRecorder,
+                                     ProfileSignalApplier profileSignalApplier, Clock clock) {
         this.callbackLogRepository = callbackLogRepository;
         this.requestRepository = requestRepository;
         this.profileRepository = profileRepository;
@@ -64,6 +70,7 @@ public class IssuanceCallbackProcessor {
         this.planQueryService = planQueryService;
         this.failureService = failureService;
         this.historyRecorder = historyRecorder;
+        this.profileSignalApplier = profileSignalApplier;
         this.clock = clock;
     }
 
@@ -78,6 +85,9 @@ public class IssuanceCallbackProcessor {
         }
         Instant now = Instant.now(clock);
         String eventKey = eventKey(command.eventId());
+        if (ACTIVATED.equals(command.eventType())) {
+            return processActivation(command, rawBody, eventKey, now);
+        }
         OrderNo orderNo = OrderNo.of(command.orderNo());
         if (!callbackLogRepository.insertIfAbsent(
                 CallbackLog.received(CallbackSource.SUPPLIER, eventKey, orderNo, rawBody, now))) {
@@ -96,6 +106,47 @@ public class IssuanceCallbackProcessor {
                 };
         callbackLogRepository.updateOutcome(eventKey, toLogOutcome(outcome.result()), outcome.note());
         return outcome.result();
+    }
+
+    /**
+     * 개통 이벤트 콜백(과제 2.3-④). 대상은 ICCID로 찾음(유심 개통 콜백은 우리 주문번호가 없음)
+     * 반영은 상태 조회(폴링)와 같은 코드: 설치 상태는 앞으로만 진행하므로 폴링이 먼저 반영했거나
+     * 늦게 도착한 콜백은 변화 없이 ALREADY_APPLIED. 콜백이 빠지면 폴링이 메움
+     */
+    private CallbackResult processActivation(IssuanceCallbackCommand command, String rawBody, String eventKey,
+                                             Instant now) {
+        Iccid iccid = Iccid.of(command.iccid());
+        Instant activatedAt = parseInstant(command.activatedAt());
+        SimProfile profile = profileRepository.findByIccid(iccid).orElse(null);
+        if (!callbackLogRepository.insertIfAbsent(CallbackLog.received(CallbackSource.SUPPLIER, eventKey,
+                profile == null ? null : profile.orderNo(), rawBody, now))) {
+            log.info("Duplicate supplier callback {}", eventKey);
+            return CallbackResult.DUPLICATE;
+        }
+        Outcome outcome;
+        if (profile == null) {
+            log.warn("Activation callback for unknown ICCID {}", iccid.value());
+            outcome = new Outcome(CallbackResult.ORDER_NOT_FOUND, "UNKNOWN_ICCID");
+        } else if (profileSignalApplier.apply(profile,
+                SupplierProfileResult.found(SupplierProfileState.ENABLED, activatedAt, 0),
+                ProfileSignalApplier.SOURCE_CALLBACK)) {
+            outcome = new Outcome(CallbackResult.PROCESSED, "ACTIVATED");
+        } else {
+            outcome = new Outcome(CallbackResult.ALREADY_APPLIED, "ALREADY_ACTIVE");
+        }
+        callbackLogRepository.updateOutcome(eventKey, toLogOutcome(outcome.result()), outcome.note());
+        return outcome.result();
+    }
+
+    private static Instant parseInstant(String value) {
+        if (value == null || value.isBlank()) {
+            return null; // 반영 시점 시각으로 대체(ProfileSignalApplier)
+        }
+        try {
+            return Instant.parse(value);
+        } catch (DateTimeParseException e) {
+            throw new InvalidValueException("INVALID_CALLBACK", "activatedAt must be an ISO-8601 instant");
+        }
     }
 
     // 접수 응답(PENDING → ACCEPTED)과 경합할 수 있어 다시 읽고 재시도

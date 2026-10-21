@@ -325,19 +325,26 @@ stateDiagram-v2
 
 ### 2.5 "이 사용자가 SIM을 설치했다"를 무엇으로 판단
 
-**공급사가 알려 주는 프로필 상태만 설치·개통의 근거로 씁니다.** 우리 서버가 직접 아는 신호는 QR 열람뿐이고, 그것은 설치가 아닙니다.
+**공급사가 알려 주는 신호만 설치·개통의 근거로 씁니다.** 공급사 신호는 두 가지입니다: **개통 이벤트 콜백**(빠르지만 가끔 빠짐)과 **상태 조회 API**(늦지만 언제든 다시 물을 수 있음). 우리 서버가 직접 아는 신호는 QR 열람뿐이고, 그것은 설치가 아닙니다.
 
 | 신호 | 출처(이력 주체) | 얼마나 믿는가 | 반영 |
 |---|---|---|---|
 | QR 열람 | 우리 API `POST /api/sims/{orderNo}/qr-viewed` (USER) | 화면을 열었다는 사실만. 설치 여부는 모름 | `QR_VIEWED`. **환불 가능 판정에 영향 없음** |
+| 개통 이벤트 콜백 `ACTIVATED` + `activatedAt` | 공급사 콜백 `POST /api/issuance/callback` (SUPPLIER, 사유 "공급사 개통 콜백") | 서명(HMAC)이 맞으면 개통의 근거. 같은 `eventId`는 한 번만 | `ACTIVE`, 개통 시각은 공급사 값. 보통 몇 초 안에 반영 |
 | `INSTALLED` | 공급사 상태 조회 (SUPPLIER) | 설치의 근거 | `INSTALLED`, 설치 시각 기록 → 환불 불가 |
 | `ENABLED` + `activatedAt` | 공급사 상태 조회 (SUPPLIER) | 개통의 근거, 개통 시각은 공급사 값(UTC) 그대로 | `ACTIVE`. 만료 = 개통 + 24시간 × 사용 일수(표시는 KST) |
 | `DELETED` | 공급사 상태 조회 (SUPPLIER) | 기기에서 지움 | 상태는 그대로, 삭제 시각만 기록. 설치했다 지운 SIM도 여전히 환불 불가 |
 
 - **앞으로만 진행**: 늦게 온 이전 단계 신호·중복 신호는 무시하고, 단계를 건너뛴 신호(설치 없이 개통)는 받아들여 빈 시각을 채웁니다. 신호 순서가 바뀌는 것을 정상 상황으로 봅니다.
-- **콜백이 빠지거나 늦을 때**: 부록 A 계약상 공급사는 설치·개통을 콜백으로 알려 주지 않으므로 **상태 조회(폴링)가 유일한 경로**이고, 신호가 늦게 반영되는 것은 다음 주기에 다시 조회해 메웁니다. 유심 개통 응답이 유실된 경우도 같은 폴링이 메웁니다(테스트로 검증). 발급 콜백 누락은 2분 대기 후 실패·자동 환불로 처리합니다(2.2).
+- **두 신호의 조합: 콜백이 주 경로, 폴링이 안전망**
+  - 개통 이벤트 콜백이 오면 바로 `ACTIVE`로 반영합니다. 유심 개통 콜백은 공급사가 우리 주문번호를 모르므로 ICCID로 프로필을 찾습니다.
+  - **콜백이 빠지면** 다음 폴링 주기(최대 약 1분)에 상태 조회가 `ENABLED`를 보고 같은 결과로 반영합니다. 설치(`INSTALLED`)·삭제(`DELETED`)는 콜백이 없어 폴링으로만 압니다.
+  - **두 경로가 같은 코드로 반영합니다**(`ProfileSignalApplier`). 설치 상태는 앞으로만 진행하고 조건부 UPDATE로 저장해서, 콜백과 폴링이 같은 개통을 동시에 반영해도 한 번만 바뀌고 이력도 1건입니다(`e2e/ActivationSignalConcurrencyTest`). 폴링이 먼저 반영한 뒤 늦게 온 콜백은 `ALREADY_APPLIED`로 기록만 남습니다.
+  - 이력 사유가 "공급사 개통 콜백" / "공급사 상태 조회"로 갈려, 운영자는 어느 신호로 바뀌었는지 볼 수 있습니다.
+  - 우리에게 없는 ICCID의 개통 콜백은 아무것도 바꾸지 않고 `callback_log`에 `TARGET_NOT_FOUND`로 남깁니다.
+- **유심 개통 응답이 유실되면**: 개통 콜백이나 폴링이 메웁니다(테스트로 검증). 발급 콜백 누락은 2분 대기 후 실패·자동 환불로 처리합니다(2.2).
 - **얼마나 자주, 어떤 SIM만**: 1분마다, **개통 전이고 삭제되지 않았으며 여행 시작일 3일 전부터 시작일 + 사용 일수까지 창 안에 있는 SIM만** 조회합니다. 여행이 먼 SIM은 아직 설치할 이유가 적고, 개통된 SIM은 만료가 시간만으로 정해지므로(조회 시점에 `EXPIRED` 판정) 다시 묻지 않습니다. 모든 활성 SIM을 매분 조회하지 않는 이유입니다.
-- **환불 판정 직전에는 다시 조회**: 운영자 수동 환불과 사용자 환불 요청은 판정 직전에 공급사 상태를 한 번 더 조회해 반영한 뒤 "설치·개통된 SIM은 환불 불가"를 판정합니다. 폴링 주기 사이에 설치된 경우도 놓치지 않기 위해서입니다.
+- **환불 판정 직전에는 다시 조회**: 콜백은 빠질 수 있고 폴링은 늦을 수 있으므로, 운영자 수동 환불과 사용자 환불 요청은 판정 직전에 공급사 상태를 한 번 더 조회해 반영한 뒤 "설치·개통된 SIM은 환불 불가"를 판정합니다. 폴링 주기 사이에 설치된 경우도 놓치지 않기 위해서입니다.
 
 **만료일 검증** (`e2e/SimExpiryE2ETest`): 부록 A 예시 그대로 7일 요금제를 주문·결제·발급한 뒤, 공급사가 `ENABLED`·`2026-05-01T15:20:00Z`를 돌려주면 폴링이 `ACTIVE`로 반영하고 만료는 `2026-05-08T15:20:00Z` = **KST 2026-05-09 00:20**, 만료 1초 전은 `ACTIVE`, 만료 시각부터 `EXPIRED`입니다.
 
@@ -441,8 +448,9 @@ curl -X POST localhost:8082/mock/supplier/config/reset
 | `issueFailureRate` | 발급 실패 확률(0~1). 접수 후 `ISSUE_FAILED` 콜백 |
 | `callbackDelayMs` | 콜백 추가 지연(0~60000), 기본 3초에 더해짐 |
 | `callbackDuplicates` | 같은 콜백 추가 발송 횟수(0~10) |
-| `callbackDrop` | 콜백 누락 |
+| `callbackDrop` | 콜백 누락(발급·개통 콜백 모두) |
 | `invalidSignature` | 틀린 비밀키로 서명 |
+| `activationCallbackDrop` | 개통 이벤트 콜백만 누락(폴링이 메우는지 시연) |
 
 콜백 서명 비밀키는 두 앱이 같은 환경변수 `SUPPLIER_CALLBACK_SECRET`을 씁니다(로컬은 같은 기본값).
 
@@ -457,8 +465,13 @@ curl localhost:8080/admin/orders/{orderNo} -H 'X-Admin-Id: admin-1'
 curl -X POST localhost:8082/mock/supplier/profiles/{iccid}/state -H 'Content-Type: application/json' -d '{"state":"INSTALLED"}'
 curl -X POST localhost:8082/mock/supplier/profiles/{iccid}/state -H 'Content-Type: application/json' -d '{"state":"ENABLED"}'
 
-# 3) 1분 안에 폴링이 반영 → 어드민 상세에서 profile.status = ACTIVE, expiresAtKst 확인
-#    이후 수동 환불을 시도하면 409 SIM_NOT_REFUNDABLE
+# 3) ENABLED가 되면 공급사가 개통 이벤트 콜백을 보냄(기본 3초 뒤) → 어드민 상세에서 profile.status = ACTIVE,
+#    expiresAtKst, 타임라인 사유 "공급사 개통 콜백: ENABLED" 확인. 이후 수동 환불을 시도하면 409 SIM_NOT_REFUNDABLE
+```
+
+개통 콜백이 빠졌을 때 폴링이 메우는 것을 보려면, 2)의 `ENABLED` 전에 개통 콜백만 끕니다. 1분 안에 폴링이 반영하고 타임라인 사유는 "공급사 상태 조회: ENABLED"가 됩니다.
+```bash
+curl -X PUT localhost:8082/mock/supplier/config -H 'Content-Type: application/json' -d '{"activationCallbackDrop": true}'
 ```
 
 ### 유심 ICCID 등록
@@ -682,6 +695,6 @@ erDiagram
 - **수동 환불은 전액만**: 부분 취소는 도메인·mock-pg에 있지만 운영자 API로는 열지 않았습니다. 사용자 환불 요청도 전액이며 사유는 받지 않습니다.
 - **내 SIM 목록**: 어드민 목록과 같이 주문 행마다 프로필을 추가 조회합니다(N+1, 페이지 최대 50건).
 - **사용자 환불 연타의 두 번째 요청은 409**: 같은 요청을 다시 보내도 200으로 돌려주는 멱등 처리는 하지 않았습니다. 화면은 409를 받으면 상세를 다시 조회해 `REFUNDING`을 보여 주면 됩니다.
-- **mock-supplier "순서 뒤바뀜" 장애 주입 없음**: 발급 결과가 주문당 1종류라 결과끼리 순서가 바뀔 대상이 없습니다. 실제로 생길 수 있는 "접수 응답보다 콜백이 먼저"는 단위 테스트(`IssuanceCallbackServiceTest`)로 검증했습니다(2.3).
+- **mock-supplier "순서 뒤바뀜" 장애 주입 없음**: 콜백은 주문당 발급 결과 1건과 개통 1건뿐이고, 개통은 발급 뒤에만 일어나 둘의 순서가 바뀔 일이 없습니다. 실제로 생길 수 있는 순서 문제인 "접수 응답보다 발급 콜백이 먼저"(`IssuanceCallbackServiceTest`)와 "개통 콜백과 폴링 중 무엇이 먼저 오든 같은 결과"(`ActivationCallbackTest`, `ActivationSignalConcurrencyTest`)는 테스트로 검증했습니다. 설치·삭제 이벤트 콜백은 과제 문구(개통 이벤트 콜백)에 맞춰 만들지 않았습니다.
 - **PG 웹훅 서명 검증은 과제 요구 밖**: 과제는 공급사 콜백의 서명 검증만 요구합니다. 위조 통지로 결제가 확정되는 것을 막기 위해 PG 웹훅에도 HMAC-SHA256 서명을 적용했습니다.
 

@@ -18,3 +18,4 @@ mock-supplier:
     callback-duplicates: 0         # 같은 콜백 추가 발송 횟수
     callback-drop: false           # 콜백 누락
     invalid-signature: false       # 틀린 비밀키로 서명
+    activation-callback-drop: false  # 개통 이벤트 콜백만 누락(폴링이 메우는지 시연)

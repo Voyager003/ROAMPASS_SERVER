@@ -131,9 +131,10 @@ public class IssuanceConfig {
                                                         OrderRepository orderRepository,
                                                         PlanQueryService planQueryService,
                                                         IssuanceFailureService failureService,
-                                                        StatusHistoryRecorder historyRecorder, Clock clock) {
+                                                        StatusHistoryRecorder historyRecorder,
+                                                        ProfileSignalApplier profileSignalApplier, Clock clock) {
         return new IssuanceCallbackProcessor(callbackLogRepository, requestRepository, profileRepository,
-                orderRepository, planQueryService, failureService, historyRecorder, clock);
+                orderRepository, planQueryService, failureService, historyRecorder, profileSignalApplier, clock);
     }
 
     @Bean

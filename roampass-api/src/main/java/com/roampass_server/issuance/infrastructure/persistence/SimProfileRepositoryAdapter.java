@@ -40,6 +40,11 @@ class SimProfileRepositoryAdapter implements SimProfileRepository {
     }
 
     @Override
+    public Optional<SimProfile> findByIccid(Iccid iccid) {
+        return jpaRepository.findByIccid(iccid.value()).map(SimProfileJpaEntity::toDomain);
+    }
+
+    @Override
     public List<SimProfile> findTrackable(LocalDate today, int lookaheadDays, int limit) {
         return jpaRepository.findTrackable(today, today.plusDays(lookaheadDays), limit).stream()
                 .map(SimProfileJpaEntity::toDomain).toList();

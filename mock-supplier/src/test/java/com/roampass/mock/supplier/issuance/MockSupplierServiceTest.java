@@ -196,4 +196,83 @@ class MockSupplierServiceTest {
                     .extracting(ProfileView::state).isEqualTo(ProfileState.ENABLED);
         }
     }
+
+    @Nested
+    @DisplayName("개통 이벤트 콜백은 (과제 2.3-④)")
+    class ActivationCallback {
+
+        private String issuedIccid() {
+            service.issue(REQUEST);
+            String iccid = published.getFirst().event().iccid();
+            published.clear();
+            return iccid;
+        }
+
+        @Test
+        @DisplayName("처음 ENABLED가 될 때 개통 시각을 담아 1번 발행하고, 다시 ENABLED로 바꿔도 더 보내지 않는다")
+        void published_once_on_first_activation() {
+            // given
+            String iccid = issuedIccid();
+
+            // when
+            service.changeState(iccid, ProfileState.INSTALLED, NOW);
+            service.changeState(iccid, ProfileState.ENABLED, NOW.plusSeconds(60));
+            service.changeState(iccid, ProfileState.ENABLED, NOW.plusSeconds(120));
+
+            // then
+            assertThat(published).singleElement().satisfies(delivery -> {
+                var event = delivery.event();
+                assertThat(event.eventType()).isEqualTo(CallbackEventType.ACTIVATED);
+                assertThat(event.eventId()).startsWith("sevt_");
+                assertThat(event.iccid()).isEqualTo(iccid);
+                assertThat(event.orderNo()).isEqualTo(REQUEST.orderNo());
+                assertThat(event.activatedAt()).isEqualTo(NOW.plusSeconds(60));
+            });
+        }
+
+        @Test
+        @DisplayName("개통 콜백 누락을 켜면 개통 콜백만 빠지고 상태 조회에는 개통이 보인다")
+        void activation_callback_drop() {
+            // given
+            String iccid = issuedIccid();
+            faults.update(new FaultSettings(0, 0, 0, false, false, true));
+
+            // when
+            service.changeState(iccid, ProfileState.ENABLED, NOW);
+
+            // then
+            assertThat(published).isEmpty();
+            assertThat(service.findProfile(iccid)).get().extracting(ProfileView::state).isEqualTo(ProfileState.ENABLED);
+        }
+
+        @Test
+        @DisplayName("중복 설정이면 같은 eventId로 여러 번, 서명 오류 설정이면 틀린 서명으로 보낸다")
+        void duplicates_and_invalid_signature() {
+            // given
+            String iccid = issuedIccid();
+            faults.update(new FaultSettings(0, 0, 2, false, true));
+
+            // when
+            service.changeState(iccid, ProfileState.ENABLED, NOW);
+
+            // then
+            assertThat(published).hasSize(3);
+            assertThat(published).extracting(d -> d.event().eventId()).containsOnly(published.getFirst().event().eventId());
+            assertThat(published).allSatisfy(d -> assertThat(d.signatureValid()).isFalse());
+        }
+
+        @Test
+        @DisplayName("유심 개통 요청도 개통 콜백을 보낸다 (공급사는 우리 주문번호를 모름)")
+        void usim_activation() {
+            // when
+            service.activateUsim("8982300912345678902", NOW);
+
+            // then
+            assertThat(published).singleElement().satisfies(delivery -> {
+                assertThat(delivery.event().eventType()).isEqualTo(CallbackEventType.ACTIVATED);
+                assertThat(delivery.event().orderNo()).isNull();
+                assertThat(delivery.event().iccid()).isEqualTo("8982300912345678902");
+            });
+        }
+    }
 }

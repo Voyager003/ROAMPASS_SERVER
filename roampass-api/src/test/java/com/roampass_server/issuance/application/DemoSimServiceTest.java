@@ -16,6 +16,7 @@ import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.common.domain.UserId;
 import com.roampass_server.issuance.domain.model.InstallStatus;
 import com.roampass_server.issuance.domain.service.SupplierProfileState;
+import com.roampass_server.order.domain.model.OrderStatus;
 
 @DisplayName("시연용 설치·개통·유심 수령")
 class DemoSimServiceTest {
@@ -87,6 +88,21 @@ class DemoSimServiceTest {
             assertThatThrownBy(() -> service.activate(USER, ORDER_NO))
                     .isInstanceOf(ConflictException.class);
             assertThat(demo.stateRequests()).hasSize(calls);
+        }
+
+        @Test
+        @DisplayName("환불 중인 주문의 SIM은 409 DEMO_NOT_APPLICABLE(공급사 호출 없음)")
+        void not_applicable_when_refunding() {
+            // given
+            f.issued();
+            f.orders.saveIfStatus(f.orders.findByOrderNo(ORDER_NO).orElseThrow().startRefund(true), OrderStatus.ISSUED);
+            assertThat(f.orderStatus()).isEqualTo(OrderStatus.REFUNDING);
+
+            // when // then
+            assertThatThrownBy(() -> service.install(USER, ORDER_NO))
+                    .isInstanceOfSatisfying(ConflictException.class,
+                            e -> assertThat(e.getCode()).isEqualTo("DEMO_NOT_APPLICABLE"));
+            assertThat(demo.stateRequests()).isEmpty();
         }
 
         @Test

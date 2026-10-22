@@ -52,7 +52,7 @@ public class DemoSimService {
         this.clock = clock;
     }
 
-    /** 이심 설치 흉내(공급사 INSTALLED). 발급됨·QR 열람 상태에서만 */
+    /** 이심 설치 흉내(공급사 INSTALLED). 발급 완료 주문의 발급됨·QR 열람 상태에서만 */
     public InstallStatus install(UserId userId, OrderNo orderNo) {
         return changeEsimState(userId, orderNo, SupplierProfileState.INSTALLED, INSTALLABLE);
     }
@@ -88,7 +88,8 @@ public class DemoSimService {
         SimProfile profile = profileRepository.findByOrderNo(orderNo)
                 .orElseThrow(() -> new NotFoundException("SIM_NOT_FOUND", "SIM is not issued yet"));
         InstallStatus before = profile.effectiveStatus(Instant.now(clock));
-        if (!allowed.contains(before)) {
+        // 환불 중·환불된 주문이나 기기에서 삭제된 SIM은 설치·개통 흉내 대상이 아님
+        if (order.status() != OrderStatus.ISSUED || profile.isDeleted() || !allowed.contains(before)) {
             throw notApplicable();
         }
         SupplierProfileResult result = demoClient.changeProfileState(profile.iccid(), target);

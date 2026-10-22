@@ -28,45 +28,23 @@ curl http://localhost:8081/actuator/health
 curl http://localhost:8082/actuator/health
 ```
 
+### DDL · 마이그레이션
+
+| 파일 (`roampass-api/src/main/resources/db/migration/`) | 내용 |
+|---|---|
+| `V1__init.sql` | `plan`, `orders`, `status_history` |
+| `V2__seed_plans.sql` | 시드 요금제 16개 (일본·미국·베트남·태국 × 이심/유심 × 2개 상품) |
+| `V3__payment_callback.sql` | `payment`, `callback_log` |
+| `V4__issuance_refund.sql` | `issuance_request`, `sim_profile`, `refund_attempt` |
+| `V5__callback_log_order_no.sql` | `callback_log.order_no` 칼럼 추가 |
+| `V6__orders_idempotency_key.sql` | `orders.idempotency_key` 칼럼과 부분 유니크 인덱스 추가 |
+
 ### 테스트
 
 ```bash
 // Docker 실행 후에
 ./gradlew test
 ```
-
-### API 호출 시 식별 헤더
-회원 시스템 대신 헤더로 호출자를 구분합니다(과제 2.2 허용 범위).
-- 사용자 API(`/api/**`): `X-User-Id: user-1`
-- 어드민 API(`/admin/**`): `X-Admin-Id: admin-1`
-
-```bash
-# 요금제 목록 (헤더 불필요, 조건은 모두 선택·정확히 일치)
-curl 'localhost:8080/api/plans?country=JP&simType=ESIM'
-
-# 주문 생성 → 201 + Location, 10분 안에 결제하지 않으면 EXPIRED
-# Idempotency-Key(선택): 같은 키로 다시 보내면 새 주문 없이 처음 주문을 그대로 돌려줌
-curl -i -X POST localhost:8080/api/orders -H 'X-User-Id: user-1' -H 'Idempotency-Key: 3f6c1a2e-7b7d-4c55-9f0e-1d2b3c4d5e6f' \
-  -H 'Content-Type: application/json' -d '{"planId": 1, "travelStartDate": "2026-10-25"}'
-
-# 주문 조회 (남의 주문은 404)
-curl localhost:8080/api/orders/{orderNo} -H 'X-User-Id: user-1'
-
-# 결제 (mock-pg가 떠 있어야 함) → paymentStatus·orderStatus
-curl -X POST localhost:8080/api/orders/{orderNo}/pay -H 'X-User-Id: user-1'
-
-# 내 SIM 목록 (결제된 주문만, 최신순, size 최대 50)
-curl 'localhost:8080/api/sims?page=0&size=20' -H 'X-User-Id: user-1'
-
-# 내 SIM 상세: 결제 금액·주문/설치 상태·ICCID·활성화 코드·만료 시각·남은 시간·환불 가능 여부·발급 대기 정보
-curl localhost:8080/api/sims/{orderNo} -H 'X-User-Id: user-1'
-
-# 사용자 환불 요청 → 202 REFUNDING (발급 전이거나 설치 전 SIM만, 아니면 409)
-curl -X POST localhost:8080/api/orders/{orderNo}/refund -H 'X-User-Id: user-1'
-```
-- 응답 시각은 UTC ISO-8601(`...Z`)입니다. 에러는 RFC 9457 `ProblemDetail`에 `code`(예: `ORDER_NOT_FOUND`, `INVALID_REQUEST`)가 붙습니다.
-- `travelStartDate`는 KST 기준 오늘부터 1년 이내여야 합니다.
-- 브라우저에서 직접 호출할 때는 `roampass.cors.allowed-origins`(기본 `http://localhost:3000`, 환경변수 `CORS_ALLOWED_ORIGINS`)에 있는 주소만 허용합니다. 제출용 프론트(Next.js)는 서버 컴포넌트·Server Action에서만 이 API를 부르는 BFF 구조라 CORS를 거치지 않고, 이 설정은 브라우저나 다른 클라이언트가 직접 부를 때를 위한 것입니다.
 
 ---
 
@@ -388,21 +366,30 @@ curl -X POST localhost:8080/admin/orders/{orderNo}/reissue -H 'X-Admin-Id: admin
 
 ---
 
-## 5. 미구현
+## 5. 기타 사항
 
-- **PG에서 다른 금액으로 승인된 결제**: 확정하지 않고 `REQUESTED`로 남깁니다. 웹훅으로 온 경우는 어드민 이상 건("금액 불일치 통지")에 나오지만, 승인 응답·상태 조회 경로에서 발견한 경우는 ERROR 로그만 남고 이상 건 목록에는 나오지 않습니다. 그동안 그 주문은 새 결제도 막힙니다.
-- **웹훅 동기 처리**: 받은 요청 안에서 처리합니다. 처리량이 커지면 수신 기록만 남기고 큐로 넘기는 구조가 맞지만, 이 규모에서는 단순한 쪽을 택했습니다.
-- **mock-pg 웹훅 재시도 없음**: 실제 PG처럼 실패 시 재전송하지는 않습니다. 중복 수신은 장애 주입의 `webhookDuplicates`로 재현합니다.
-- **공급사 쪽 프로필 회수 없음**: 실패 처리 뒤 늦게 성공 콜백이 오거나, 발급된(미설치) SIM을 수동 환불해도 공급사에 프로필 회수를 요청하지 않습니다(부록 A 계약에 회수 API가 없음).
-- **개통 후 삭제는 추적하지 않음**: 폴링 대상이 개통 전 SIM뿐이라, 개통한 뒤 기기에서 지운 것은 반영되지 않습니다. 설치·개통 여부와 환불 불가 판정은 개통 시점에 이미 정해져 결과가 달라지지 않습니다.
-- **공급사 신호 정정 기능 없음**: 공급사가 잘못된 상태를 줘도 설치 상태는 앞으로만 진행해서, 운영자가 되돌리거나 덮어쓸 수 없습니다.
-- **어드민 목록**: 검색 SQL로 주문번호를 고른 뒤 행마다 주문·결제·프로필을 추가 조회합니다(N+1, 페이지 최대 50건). 결제 상태 필터는 "가장 최근 결제 시도" 기준이라 서브쿼리가 주문마다 돌고, `payment(order_no)` 일반 인덱스는 따로 두지 않았습니다(데이터가 많아지면 추가 대상).
-- **수동 환불은 전액만**: 부분 취소는 도메인·mock-pg에 있지만 운영자 API로는 열지 않았습니다. 사용자 환불 요청도 전액이며 사유는 받지 않습니다.
-- **내 SIM 목록**: 어드민 목록과 같이 주문 행마다 프로필을 추가 조회합니다(N+1, 페이지 최대 50건).
-- **사용자 환불 연타의 두 번째 요청은 409**: 같은 요청을 다시 보내도 200으로 돌려주는 멱등 처리는 하지 않았습니다. 화면은 409를 받으면 상세를 다시 조회해 `REFUNDING`을 보여 주면 됩니다.
-- **mock-supplier "순서 뒤바뀜" 장애 주입 없음**: 콜백은 주문당 발급 결과 1건과 개통 1건뿐이고, 개통은 발급 뒤에만 일어나 둘의 순서가 바뀔 일이 없습니다. 실제로 생길 수 있는 순서 문제인 "접수 응답보다 발급 콜백이 먼저"(`IssuanceCallbackServiceTest`)와 "개통 콜백과 폴링 중 무엇이 먼저 오든 같은 결과"(`ActivationCallbackTest`, `ActivationSignalConcurrencyTest`)는 테스트로 검증했습니다. 설치·삭제 이벤트 콜백은 과제 문구(개통 이벤트 콜백)에 맞춰 만들지 않았습니다.
-- **PG 웹훅 서명 검증은 과제 요구 밖**: 과제는 공급사 콜백의 서명 검증만 요구합니다. 위조 통지로 결제가 확정되는 것을 막기 위해 PG 웹훅에도 HMAC-SHA256 서명을 적용했습니다.
+### 미구현
 
-## 6. 투입 시간
+- **모의 PG 통지 지연의 실행 중 변경**: 승인 응답 지연은 실행 중에 바꿀 수 있지만, 웹훅 발송 지연은 시작 설정(`mock-pg.webhook.delay`)으로만 바뀝니다.
+- **OpenAPI 명세**: README 호출 예시로 대신
 
+**가산점 part 미구현**
+- 공급사 추상화, 데이터 사용량 알림, 장기 미설치 관리, 다국어·다통화, 발급·환불 실패 알림
+
+**타협한 part**
+- **개통 후 삭제 미추적**: 폴링은 개통 전 SIM만 조회
+- **PG 상태 조회에서 금액 불일치를 발견하면 로그만**: 웹훅 경로는 "처리 대기"에 나오지만, 승인 응답·상태 조회 경로는 ERROR 로그만 남김
+- **유심 수령 대기 기한 없음**: 등록하지 않은 유심을 자동 만료·환불하지 않음
+
+### 투입 시간
+
+정확하진 않지만 13~14시간 정도 걸렸습니다.
+
+### AI 사용
+
+Claude Code 사용했으며, 코드 작성부터 테스트 케이스 만들기, 아키텍처, ERD 이미지 구성에 사용했습니다.
+
+### 배포 관련
+
+배포에서 막힌 것은 없음
 

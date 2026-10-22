@@ -48,6 +48,7 @@ services:
         MODULE: mock-pg
     image: mock-pg
     environment:
+      SPRING_PROFILES_ACTIVE: prod   # ECS JSON 로그(roampass-api와 같은 형식)
       PG_WEBHOOK_URL: http://roampass-api:8080/api/payments/webhook
     ports:
       - '8081:8081'

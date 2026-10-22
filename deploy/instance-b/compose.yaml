@@ -5,6 +5,7 @@ services:
     image: ghcr.io/${IMAGE_OWNER:?.env 필요}/mock-pg:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
+      SPRING_PROFILES_ACTIVE: prod   # ECS JSON 로그
       # 인스턴스 A의 사설 IP로 웹훅 전송
       PG_WEBHOOK_URL: http://${INSTANCE_A_PRIVATE_IP:?.env 필요}:8080/api/payments/webhook
       PG_WEBHOOK_SECRET: ${PG_WEBHOOK_SECRET:?.env 필요}

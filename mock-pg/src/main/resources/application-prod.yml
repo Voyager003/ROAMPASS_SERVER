@@ -1,0 +1,5 @@
+# 컨테이너(로컬 compose --profile app, 배포 인스턴스 B)에서 켜는 프로필: roampass-api와 같은 ECS JSON 로그
+logging:
+  structured:
+    format:
+      console: ecs

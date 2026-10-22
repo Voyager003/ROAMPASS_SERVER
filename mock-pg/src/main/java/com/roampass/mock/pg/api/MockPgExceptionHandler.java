@@ -1,5 +1,7 @@
 package com.roampass.mock.pg.api;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -18,8 +20,12 @@ import com.roampass.mock.pg.payment.MockPgException;
 @RestControllerAdvice
 public class MockPgExceptionHandler extends ResponseEntityExceptionHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(MockPgExceptionHandler.class);
+
     @ExceptionHandler(MockPgException.class)
     ResponseEntity<ProblemDetail> handleMockPg(MockPgException e) {
+        log.info("event=pg_request_rejected status={} code={} detail=\"{}\"", e.getStatus().value(), e.getCode(),
+                e.getMessage());
         ProblemDetail body = ProblemDetail.forStatusAndDetail(e.getStatus(), e.getMessage());
         body.setProperty("code", e.getCode());
         return ResponseEntity.status(e.getStatus()).body(body);

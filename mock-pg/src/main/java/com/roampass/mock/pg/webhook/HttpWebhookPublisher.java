@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 import tools.jackson.databind.json.JsonMapper;
 
@@ -65,9 +66,14 @@ public class HttpWebhookPublisher implements WebhookPublisher {
                     .body(body)
                     .retrieve()
                     .toBodilessEntity();
-            log.info("Webhook sent: {} {}", event.eventType(), event.eventId());
+            log.info("event=pg_webhook_sent eventId={} type={} idempotencyKey={} amount={}", event.eventId(),
+                    event.eventType(), event.idempotencyKey(), event.amount());
+        } catch (RestClientResponseException e) {
+            log.warn("event=pg_webhook_failed eventId={} type={} idempotencyKey={} status={}", event.eventId(),
+                    event.eventType(), event.idempotencyKey(), e.getStatusCode().value());
         } catch (RestClientException e) {
-            log.warn("Webhook delivery failed: {} {}", event.eventId(), e.getMessage());
+            log.warn("event=pg_webhook_failed eventId={} type={} idempotencyKey={} error=\"{}\"", event.eventId(),
+                    event.eventType(), event.idempotencyKey(), e.getMessage());
         }
     }
 }

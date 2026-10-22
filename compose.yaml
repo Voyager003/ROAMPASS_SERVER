@@ -61,6 +61,7 @@ services:
         MODULE: mock-supplier
     image: mock-supplier
     environment:
+      SPRING_PROFILES_ACTIVE: prod   # ECS JSON 로그(roampass-api와 같은 형식)
       SUPPLIER_CALLBACK_URL: http://roampass-api:8080/api/issuance/callback
     ports:
       - '8082:8082'

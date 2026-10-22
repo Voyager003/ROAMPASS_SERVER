@@ -7,61 +7,33 @@
 ## 1. 실행 방법
 
 ### 사전 요구사항
-- Docker (방법 A 전체 기동, 방법 B의 PostgreSQL, 통합 테스트용 Testcontainers)
-- JDK 21 (방법 B로 앱을 직접 실행하거나 테스트를 돌릴 때)
+- Docker, Docker + Docker Compose v2
+- JDK 21 (테스트 시)
 
 ### 로컬 실행
-두 가지 방법이 있습니다. 결과(포트·주소)는 같으므로 둘 중 하나만 띄웁니다.
 
-**방법 A — Docker로 전부 띄우기** (JDK 없이 Docker만 필요)
 ```bash
 git clone https://github.com/Voyager003/ROAMPASS_SERVER.git
 cd ROAMPASS_SERVER
 
-# 1) 로컬 DB 접속 정보 (gitignore 대상)
 cp .env.example .env
 
-# 2) postgres + roampass-api + mock-pg + mock-supplier 빌드·기동 (처음 빌드는 몇 분)
 docker compose --profile app up -d --build
-
-# 3) 기동 확인 (api는 DB 준비 후 시작해 수십 초 걸릴 수 있음)
-curl http://localhost:8080/actuator/health
-curl http://localhost:8081/actuator/health
-curl http://localhost:8082/actuator/health
-
-# 로그 / 종료
-docker compose --profile app logs -f roampass-api
-docker compose --profile app down
 ```
-컨테이너끼리는 서비스 이름으로 통신합니다(`roampass-api` → `mock-pg:8081`·`mock-supplier:8082`, 웹훅·콜백은 → `roampass-api:8080`). 이미지는 루트 `Dockerfile` 하나를 `MODULE` 인자로 세 앱에 공용으로 씁니다.
 
-**방법 B — 앱은 Gradle로 직접 실행** (개발 중, JDK 21 필요)
-```bash
-# 1) 로컬 접속 정보 파일 (둘 다 gitignore 대상, 두 파일의 값은 서로 같아야 함)
-cp .env.example .env
-cp roampass-api/src/main/resources/application-local.yml.example \
-   roampass-api/src/main/resources/application-local.yml
-
-# 2) 로컬 PostgreSQL만 기동 (localhost:5432)
-docker compose up -d
-
-# 3) 세 앱 실행 (각각 다른 터미널에서. bootRun은 끌 때까지 터미널을 차지함)
-./gradlew :roampass-api:bootRun     # http://localhost:8080
-./gradlew :mock-pg:bootRun          # http://localhost:8081
-./gradlew :mock-supplier:bootRun    # http://localhost:8082
-
-# 4) 기동 확인
+```
+# 기동 확인
 curl http://localhost:8080/actuator/health
 curl http://localhost:8081/actuator/health
 curl http://localhost:8082/actuator/health
 ```
-DB 스키마와 시드 데이터는 `roampass-api` 기동 시 Flyway가 자동으로 적용합니다.
 
 ### 테스트
+
 ```bash
+// Docker 실행 후에
 ./gradlew test
 ```
-- Docker가 실행 중이어야 합니다. `roampass-api` 통합 테스트는 Testcontainers로 PostgreSQL 17 컨테이너를 직접 띄우므로 `docker compose`나 `application-local.yml`은 필요 없습니다.
 
 ### API 호출 시 식별 헤더
 회원 시스템 대신 헤더로 호출자를 구분합니다(과제 2.2 허용 범위).
@@ -98,614 +70,325 @@ curl -X POST localhost:8080/api/orders/{orderNo}/refund -H 'X-User-Id: user-1'
 
 ---
 
-## 2. 질문에 대한 답
+## 2. Q&A
 
 ### 2.1 기술선택 이유
 
-> 진행 중인 초안입니다. 프론트(Next.js)와 배포 호스팅 항목은 해당 작업을 마친 뒤 채웁니다. 결정 전체와 시점은 `docs/decisions.md`에 있습니다.
+#### 2.1.1 ORM 및 쿼리: Spring Data JPA
 
-| 영역 | 선택 | 이유 | 고려했다가 버린 것 |
-|---|---|---|---|
-| 백엔드 | Java 21, Spring Boot 4.1.1, Gradle | 과제가 지정한 Spring. Initializr 생성본을 그대로 사용 | — |
-| DB | PostgreSQL + Flyway(`ddl-auto: validate`) | 유니크 제약·`timestamptz`를 그대로 활용. 빈 DB에서 스키마·시드가 재현되어야 해서 마이그레이션 파일로 관리 | Hibernate `ddl-auto: update` |
-| ORM | Spring Data JPA, 단 **도메인 모델과 JPA 엔티티를 분리** | 상태 전이·멱등 규칙을 Spring·DB 없이 단위 테스트하기 위함. JPA 매핑은 도메인이 확정된 뒤 각 단계의 마지막에 작성 | 도메인 객체에 JPA 애너테이션 직접 사용 (대가: 매퍼 코드 증가) |
-| 비동기 작업 | DB 상태 기반 `@Scheduled` 폴링 | 결제 커밋 후 사용자가 브라우저를 닫아도 서버가 발급을 끝까지 진행. 외부 인프라가 없고 서버 재시작에도 작업이 사라지지 않음 | 커밋 후 이벤트 + `@Async`, 메시지 큐 (대가: 폴링 주기만큼 지연) |
-| 모의 PG · 공급사 | 별도 Spring Boot 앱 2개 (Gradle 멀티모듈), 우리 서버와 **HTTP로만** 통신 | PG 타임아웃·공급사 다운·콜백 누락을 실제 프로세스·네트워크 분리로 재현. 서명(HMAC) 코드도 모듈마다 따로 구현해 "계약만 공유"함을 보임 | 같은 앱 안의 컨트롤러 |
-| 테스트 | JUnit 5 + AssertJ, Testcontainers PostgreSQL | 중복 처리의 핵심인 유니크 제약·조건부 UPDATE는 실제 PostgreSQL에서만 검증 의미가 있음 | H2 (PostgreSQL 모드) |
-| 인증 | `X-User-Id` / `X-Admin-Id` 헤더 | 과제가 헤더 수준이면 충분하고 평가 항목이 아니라고 명시. 헤더는 위조 가능하다는 한계를 인지 | 회원 도메인 + 로그인 |
-| 에러 응답 | RFC 9457 `ProblemDetail` + `code` | Spring 내장 표준 형식. 도메인 예외는 HTTP를 모르고, 웹 계층에서 상태 코드로 매핑 | 자체 응답 형식 |
-| 금액 | `Money` 값 객체 (금액 + 통화, 음수 금지) | 부분 취소 시 "승인 금액보다 많이 취소"를 값 수준에서 차단. 다통화 확장 대비 | `long` 금액만 사용 |
-| 프론트 | _(작성 예정)_ | | |
-| 배포 | _(작성 예정)_ Oracle Cloud Always Free 인스턴스 2대 예정 | | |
+선택 이유는 현재 회사에서 사용하는 기술 스택(with Mybatis)이기도 하고, 처음 써보는 기술을 어떻게 적용할 수 있을지에 대한 고민을 해볼 수 있을거라고 생각했습니다.
+
+여기서 순수한 도메인 모델과 JPA 로직을 분리해서 작성했는데, 그 이유는 도메인은 핵심 비즈니스가 동작하기 때문에 변동이 많은 객체이기 때문입니다.
+
+JPA를 미리 매핑해버리면 JPA 매핑과 DB 테이블이 고정되어서 추후에 추가적인 작업이 필요하다고 생각했으며, 때문에 도메인이 정립된 이후에 최종적으로 테이블에 매핑하는 용도로만 사용했습니다.       
+
+처음 쓰는 기술이기 때문에 먼저 AI에게 공식 문서를 학습시킨 뒤에, 질답 형식으로 객체 간 테이블이 어떻게 매핑되는지, 작동 방식(프록시 구현체, 영속성 컨텍스트..)을 우선적으로 학습하고 이해한 부분에 대해서만 적용했습니다.
+
+#### 2.1.2 비동기 작업: DB 상태 기반 `@Scheduled` 폴링
+
+DB에 남은 상태를 스케줄러가 주기적으로 polling 하도록 처리했습니다.
+
+익숙한 방식이기도 하고 복잡성을 크게 늘리지 않고 해결할 수 있는 방법이어서 택했습니다.
+
+#### 2.1.3 DB: PostgreSQL 17 + Flyway
+
+DB도 마찬가지로 회사에서 사용하는 기술이고, 익숙한 RDB여서 택했습니다.
+
+#### 2.1.4 호스팅 및 배포: Oracle Cloud, Docker
+
+Oracle을 선택한 이유는 1GB 인스턴스를 2개까지 무료로 사용할 수 있기 때문에 비용을 고려한 선택입니다.
+
+프로덕션 상황이라면 각 애플리케이션, DB, 모의 PG/공급사까지 고려했을 때 4개 이상의 인스턴스를 구성해야 하겠지만 비용의 문제로 다음과 같이 구성했습니다.
+
+- 인스턴스 1: App Server + DB(Postgres)
+- 인스턴스 2: Mock PG, Mock SIM 공급사
+
+이 때 각 서버는 Docker 컨테이너로 관리하며, Docker를 선택한 이유는 익숙한 기반의 기술이고 일관적인 배포 환경을 쉽게 구성할 수 있기 때문에 선택했습니다.
+
+#### 추가한 라이브러리
+
+테스트를 위해 **Testcontainers**를 도입을 했습니다. 
+
+단위 테스트는 주로 도메인 기능이 제대로 작동하는지 확인하며, 별도의 통시성 테스트나 시나리오 테스트(ex: 결제가 되었지만 발급이 실패하면 자동으로 환불되어야 한다)를 테스트 해야했기 때문에 별도로 도입했습니다.
 
 ### 2.2 결제, 발급, 주문 상태 설계
 
-> 상태와 전이 규칙은 도메인 모델(순수 Java)로 구현되어 단위 테스트로 고정되어 있습니다. 상태를 바꾸는 주체(스케줄러·콜백·API) 중 주문 생성(API), 결제 대기 만료(스케줄러), 결제 확정(승인 응답·PG 웹훅·상태 조회 스케줄러), 이심 발급(발급 스케줄러·공급사 콜백·대기 초과 스케줄러), 자동 환불(환불 스케줄러), 유심 ICCID 등록(API), 설치 추적(공급사 상태 폴링), 운영자 조치(어드민 API)까지 모두 연결되어 있습니다.
+![](docs/image/01.png)
 
-**원칙: 주문 상태와 SIM 상태를 나눴습니다.**
-- **주문(`Order`)**: 돈을 받고 SIM을 내주기까지(결제 → 발급 → 환불). 이심이든 유심이든 SIM을 내주면 `ISSUED`로 끝납니다.
-- **SIM(`SimProfile`)**: 내준 SIM이 기기에서 어떻게 되는지(QR 열람 → 설치 → 개통 → 만료).
+#### 2.2.1 결제는 되었는데 발급이 안된 경우
 
-두 흐름은 신호를 주는 곳이 다릅니다. 주문은 PG와 공급사의 발급 결과로 바뀌고, SIM은 공급사의 상태 조회·개통 이벤트로 바뀝니다. 바뀌는 주기도 다르기 때문에 하나의 상태로 섞지 않았습니다.
+ESIM 주문은 결제가 확정되면 `PAID`가 되고, 발급 스케줄러가 10초마다 이 주문을 찾아 공급사에 발급을 요청하면서 `ISSUE_REQUESTED`로 바꿉니다. 
 
-#### 주문 상태
-| 상태 | 뜻 |
-|---|---|
-| `PENDING` | 주문 생성, 결제 대기 (기본 10분 뒤 만료) |
-| `EXPIRED` | 결제 대기 시간 초과 |
-| `PAID` | 결제 확정, 이심 발급 요청 대기 |
-| `PICKUP_READY` | 결제 확정, 유심 공항 수령 대기 |
-| `ISSUE_REQUESTED` | 공급사에 발급 요청, 콜백 대기 |
-| `ISSUED` | SIM을 내줌 (이심: 콜백으로 ICCID·활성화 코드 수신 / 유심: ICCID 등록) |
-| `ISSUE_FAILED` | 발급 최종 실패 — 돈은 받은 상태 |
-| `REFUNDING` | 환불 진행 중 (PG 취소 재시도 포함) |
-| `REFUNDED` | 환불 완료 (종료) |
-| `NEEDS_ATTENTION` | 자동 처리 포기, 운영자 확인 대상 |
+공급사는 접수만 바로 응답하고 SIM 정보는 몇 초 뒤 콜백으로 보내므로, 정상이라면 이 두 상태는 수 초에서 십여 초 사이에 지나가고 주문은 `ISSUED`가 됩니다. 즉 "결제는 됐는데 아직 발급이 안 된" 주문은 평소에는 `PAID` 또는 `ISSUE_REQUESTED`에 잠깐 머무는 것이고, 문제는 이 상태에서 끝나지 않는 경우입니다.
 
-```mermaid
-stateDiagram-v2
-    [*] --> PENDING: 주문 생성 (USER)
-    PENDING --> PAID: 결제 확정, 이심 (PG)
-    PENDING --> PICKUP_READY: 결제 확정, 유심 (PG)
-    PENDING --> EXPIRED: 결제 대기 만료 (SYSTEM)
-    EXPIRED --> REFUNDING: 만료 후 승인 도착 (PG)
-    PAID --> ISSUE_REQUESTED: 발급 요청 (SYSTEM)
-    ISSUE_REQUESTED --> ISSUED: 발급 콜백 (SUPPLIER)
-    ISSUE_REQUESTED --> ISSUE_FAILED: 실패·타임아웃
-    PICKUP_READY --> ISSUED: ICCID 등록 (USER)
-    ISSUE_FAILED --> REFUNDING: 자동 환불 (SYSTEM)
-    PAID --> REFUNDING: 환불 요청
-    PICKUP_READY --> REFUNDING: 환불 요청
-    ISSUED --> REFUNDING: 환불(미설치 시)
-    REFUNDING --> REFUNDED: PG 취소 성공
-    REFUNDING --> NEEDS_ATTENTION: 재시도 3회 실패 (SYSTEM)
-    NEEDS_ATTENTION --> REFUNDING: 수동 환불 (ADMIN)
-    NEEDS_ATTENTION --> ISSUE_REQUESTED: 재발급 (ADMIN)
-    ISSUED --> [*]
-    REFUNDED --> [*]
-```
+발급이 실패하는 경우는 세 가지로, 1) 공급사가 실패 콜백을 보내거나 2) 발급 요청 자체를 거절하거나 3) 2분이 지나도록 콜백이 오지 않는 경우입니다. 
 
-전이 규칙은 `OrderStatus` 한 곳에 표로 정의되어 있고, 표에 없는 전이는 `IllegalStateTransitionException`으로 거부됩니다.
+어느 경우든 주문은 `ISSUE_FAILED`가 되고, 같은 트랜잭션 안에서 곧바로 `REFUNDING`으로 넘어가며 환불 요청이 만들어집니다. 
 
-**설계에서 고민한 지점**
-- **만료 직전 결제, 만료 뒤 승인 도착**: 만료된 주문은 되살리지 않고 `EXPIRED → REFUNDING`으로 돈을 돌려줍니다. 만료 판정은 승인이 도착한 시각과 만료 시각을 비교하므로, 만료 스케줄러가 언제 돌았는지와 관계없이 결과가 같습니다.
-- **스케줄러가 돌기 전의 만료**: 만료 시각이 지난 `PENDING` 주문은 조회와 결제 요청에서 이미 `EXPIRED`로 취급합니다. 스케줄러 주기만큼 생기는 공백이 없습니다.
-- **만료 스케줄러**: 30초마다(이전 실행 종료 기준) 만료 시각이 지난 `PENDING` 주문을 최대 100건씩 `EXPIRED`로 저장하고 이력(`SYSTEM`)을 남깁니다. 저장은 `WHERE status = 'PENDING'` 조건부 UPDATE라서, 같은 순간 결제 확정이 먼저 상태를 바꿨다면 그 주문은 건너뜁니다. 실패하면 로그를 남기고 다음 주기에 다시 시도합니다.
-- **결제 실패 후 재시도**: 승인이 실패해도 주문은 `PENDING`으로 남고, 만료 전까지 다시 결제할 수 있습니다. 결제는 시도마다 1건이고, 주문당 승인된 결제는 최대 1건입니다.
-- **늦게 온 발급 성공**: 콜백 대기 시간(2분)이 지나 실패·환불 처리한 뒤 성공 콜백이 오면 프로필을 붙이지 않고 이상 건으로 기록합니다(`callback_log.note = LATE_ISSUANCE`). 환불은 그대로 진행하고, 공급사 쪽 프로필 회수는 운영자 몫입니다.
-- **환불을 별도 상태로**: PG 취소는 타임아웃·5xx로 실패할 수 있습니다. 재시도하는 동안 주문이 `ISSUED`나 `ISSUE_FAILED`로 보이면 잘못 읽히므로 `REFUNDING`을 두었습니다. 재시도는 최대 3회(1분 → 2분 → 4분)이고, 넘으면 `NEEDS_ATTENTION`으로 운영자에게 넘깁니다.
-- **재발급 제한**: 운영자 재발급은 한 번도 발급된 적 없는 이심 주문만 가능합니다. 한 주문에 프로필이 두 번 붙지 않게 하기 위해서입니다.
-- **설치된 SIM은 환불 불가**: `ISSUED`의 환불은 SIM이 한 번도 설치·개통되지 않았을 때만 허용합니다. 판정은 `SimProfile`이 합니다.
+실패와 환불 시작을 한 트랜잭션에 묶었기 때문에 "발급은 실패했는데 환불은 시작되지 않은" 상태는 생기지 않으며, 이후 환불 스케줄러가 15초마다 PG에 결제 취소를 요청하고, 성공하면 주문은 `REFUNDED`로 끝납니다.
 
-**결제는 됐는데 발급이 안 된 주문은 어디에 있고, 누가 끝내는가**
+PG 취소도 타임아웃이나 서버 문제로 실패할 수 있기 때문에, 1분 → 2분 간격으로 최대 3번까지 다시 시도하며, 같은 취소 키로 다시 보내므로 실제로는 취소가 됐는데 응답만 못 받은 경우에도 두 번 취소되지 않습니다. 
 
-| 있는 곳 | 끝내는 주체 |
-|---|---|
-| `PAID` (발급 요청 전) | 발급 스케줄러(10초 주기)가 조건부 UPDATE로 집어 `ISSUE_REQUESTED`로 바꾸고 공급사에 요청 |
-| `ISSUE_REQUESTED` (콜백 대기) | 공급사 콜백이 `ISSUED`로. 접수 응답을 못 받았으면 같은 멱등 키로 재전송. 2분 안에 콜백이 없으면 대기 초과 스케줄러가 `ISSUE_FAILED`로 |
-| `ISSUE_FAILED` | 같은 트랜잭션에서 바로 `REFUNDING`으로 넘어가고 환불 요청이 생김(실패 콜백·접수 거절·대기 초과 모두) |
-| `REFUNDING` | 환불 스케줄러(15초 주기)가 PG 취소를 시도해 `REFUNDED`로. 실패하면 1분·2분 뒤 재시도, 3회 모두 실패하면 `NEEDS_ATTENTION` |
-| `NEEDS_ATTENTION` | 어드민 이상 건 목록에 나오고, 운영자가 수동 환불(→ `REFUNDING`) 또는 재발급(→ `ISSUE_REQUESTED`). 운영자 ID와 사유가 반드시 이력에 남고, 두 운영자가 동시에 눌러도 조건부 UPDATE로 한 번만 실행 |
+끝내 3번 모두 실패하면 더 이상 자동으로 재시도하지 않고 주문을 `NEEDS_ATTENTION`으로 옮겨 운영자에게 넘깁니다. 
 
-어느 경우에도 "결제됐는데 아무 흔적 없이 멈춘 주문"이 남지 않도록, 모든 중간 상태에 그 상태를 끝낼 주체를 정해 두었습니다.
+운영자는 "처리 대기 → 환불 실패"에서 이 주문을 보고, 수동 환불(다시 `REFUNDING`)이나 발급 재시도(다시 `ISSUE_REQUESTED`) 중 하나를 선택하도록 설계했습니다. 
 
-**사용자가 결제 직후 브라우저를 닫으면**: 결제 확정 뒤의 발급은 클라이언트가 이어서 호출하지 않고, 서버 스케줄러가 `PAID` 주문을 집어 진행합니다. 그래서 브라우저를 닫아도 발급은 끝까지 진행됩니다. 사용자는 나중에 "내 SIM"에서 결과를 확인합니다.
+이는 모두 이력에 운영자 ID와 이유가 남고, 두 운영자가 동시에 눌러도 한 번만 실행됩니다.
 
-#### 결제 상태 (결제 시도 1건)
-```mermaid
-stateDiagram-v2
-    [*] --> REQUESTED: 결제 요청
-    REQUESTED --> APPROVED: 승인 (금액 일치 시)
-    REQUESTED --> FAILED: 승인 실패
-    APPROVED --> PARTIALLY_CANCELLED: 부분 취소
-    APPROVED --> CANCELLED: 전액 취소
-    PARTIALLY_CANCELLED --> PARTIALLY_CANCELLED: 추가 부분 취소
-    PARTIALLY_CANCELLED --> CANCELLED: 남은 금액 취소
-```
-- 같은 승인(같은 PG 거래 ID)이 다시 오면 아무것도 바꾸지 않습니다. 승인 응답과 웹훅이 둘 다 오거나 웹훅이 여러 번 와도 한 번만 반영됩니다.
-- 통지 금액이 결제 금액과 다르면 승인하지 않습니다(결제는 `REQUESTED`로 남음).
-- `APPROVED`와 `FAILED`는 서로 뒤집히지 않습니다. 취소 누적액은 승인 금액을 넘을 수 없습니다.
-- PG 응답이 유실되면 `REQUESTED`로 남겨 두고, 웹훅이나 상태 조회 스케줄러(요청 후 1분 지난 건을 30초마다 조회)로 확정합니다. PG가 요청을 받은 적 없으면(404) `FAILED`로 닫아 다시 결제할 수 있게 합니다.
-- 결과를 모르는 `REQUESTED` 시도가 있는 동안에는 새 결제를 받지 않습니다(이중 결제 방지, 2.4 참고).
+자동 처리 중간에 서버가 멈추는 등의 이유로 결제 승인 후 5분이 지나도 `PAID`나 `ISSUE_REQUESTED`에 머무는 주문은 어드민 "처리 대기 → 결제 후 미발급"에 모입니다. 
 
-#### 환불 요청 상태
-```mermaid
-stateDiagram-v2
-    [*] --> PENDING: 환불 시작
-    PENDING --> PENDING: PG 취소 실패, 다음 시도 예약
-    PENDING --> SUCCEEDED: PG 취소 성공
-    PENDING --> GAVE_UP: 3회 실패
-```
-운영자가 `GAVE_UP` 뒤에 수동 환불을 하면 새 환불 요청을 만듭니다. 그래서 "자동 3회 실패 → 운영자 수동 환불" 기록이 구분되어 남습니다.
+결과적으로 결제된 주문은 발급 완료(`ISSUED`), 환불 완료(`REFUNDED`), 운영자 확인 대상(`NEEDS_ATTENTION`, 미발급 목록) 중 하나로 반드시 드러나며, 결제만 되고 아무도 모르는 채 남는 주문은 없도록 설계했습니다.
 
-#### SIM 설치 상태
-```mermaid
-stateDiagram-v2
-    [*] --> ISSUED: 발급
-    ISSUED --> QR_VIEWED: QR 열람 (USER)
-    ISSUED --> INSTALLED: 설치 (SUPPLIER)
-    QR_VIEWED --> INSTALLED: 설치 (SUPPLIER)
-    ISSUED --> ACTIVE: 개통, 설치 신호 누락 시
-    QR_VIEWED --> ACTIVE: 개통, 설치 신호 누락 시
-    INSTALLED --> ACTIVE: 개통 (SUPPLIER)
-    ACTIVE --> EXPIRED: 개통 + 24시간 × N 경과
-```
-- 앞으로만 진행합니다. 늦게 도착한 이전 단계 신호와 중복 신호는 예외 없이 무시합니다. 신호 순서가 바뀌는 것은 정상 상황이기 때문입니다.
-- 만료는 **개통 시각 + 24시간 × 사용 일수**입니다. 예: `2026-05-01T15:20:00Z`에 개통한 7일 요금제는 `2026-05-08T15:20:00Z`, 즉 **한국 시간 5월 9일 00:20**에 만료됩니다.
-- 기기에서 프로필을 지워도 상태는 그대로 두고 삭제 시각만 기록합니다. 설치했다 지운 SIM은 여전히 환불할 수 없습니다.
+#### 2.2.2 사용자가 결제 직후 브라우저를 닫는다면?
 
-### 2.3 중복 처리를 어떻게 막았고, 어떻게 증명했습니까?
+결제 확정 이후는 발급은 서버가 끝까지 진행하는 구조라고 생각했습니다. 따라서 사용자가 결제 직후 브라우저를 닫아도 발급은 그대로 진행됩니다.
 
-**결제 통지: 세 겹으로 막습니다.** 승인 응답·웹훅·상태 조회 세 경로가 모두 같은 "결제 확정" 유스케이스 하나를 거칩니다.
+먼저 결제 자체는 브라우저가 아니라 서버에서 확정됩니다. 결제 버튼을 누르면 요청은 Next.js 서버를 거쳐 roampass-api로 가고, roampass-api가 PG에 승인을 요청합니다. 브라우저가 그 응답을 받지 못하더라도 PG가 보내는 웹훅으로 결제가 확정되고, 웹훅마저 오지 않으면 1분 뒤 결제 상태 조회 스케줄러가 PG에 직접 물어 확정합니다.
 
-| 단계 | 막는 것 | 방법 |
-|---|---|---|
-| ① 수신 기록 | 같은 웹훅의 재전송(같은 `eventId`) | `callback_log.event_key` UNIQUE + `INSERT ... ON CONFLICT DO NOTHING`. 영향 행 0이면 중복으로 보고 아무것도 하지 않음 |
-| ② 결제 상태 | 다른 경로로 같은 승인이 또 옴(응답 + 웹훅, 서로 다른 이벤트) | 도메인: 같은 PG 거래 ID의 승인은 변화 없음. DB: `UPDATE payment ... WHERE idempotency_key = ? AND status = 'REQUESTED'`, 영향 행 0이면 이미 반영됨 |
-| ③ 주문 상태 | 결제 확정과 만료 스케줄러의 경합 | `UPDATE orders ... WHERE order_no = ? AND status = ?`(읽은 상태 그대로일 때만). 실패하면 다시 읽어 판단(만료됐으면 `REFUNDING`) |
-| 최후 방어 | 위 검사가 모두 뚫린 경우 | 부분 유니크 인덱스: 주문당 승인된 결제 최대 1건 |
+결제가 확정되어 주문이 `PAID`가 되면, 그 상태 자체가 "발급해야 함"이라는 표시로 DB에 남습니다. 
 
-동시에 두 트랜잭션이 같은 행을 바꾸려 하면, 나중 쪽은 앞 트랜잭션이 커밋할 때까지 기다린 뒤 조건(`status = 'REQUESTED'`)을 다시 검사해 0행을 받습니다. 그래서 상태 변경과 이력 기록은 한쪽에서만 일어납니다.
+발급 스케줄러는 사용자 요청과 상관없이 10초마다 `PAID` 주문을 찾아 공급사에 요청하고, 결과도 공급사 콜백으로 서버에 직접 들어옵니다. 
 
-**고른 방법과 버린 방법**
+발급이 실패했을 때의 대기 초과 판단과 자동 환불도 모두 서버 스케줄러가 처리하며, 서버가 재시작되더라도 작업은 DB에 그대로 남아 있으므로 이어서 폴링을 시도합니다.
 
-| 방법 | 판단 |
-|---|---|
-| 조건부 UPDATE + 유니크 제약 | **채택.** 검사와 변경을 DB가 한 문장으로 처리. 실패가 예외가 아니라 "영향 행 0"이라는 결과값이라, 같은 트랜잭션 안에서 "이미 처리됨"을 기록하고 정상 종료할 수 있음 |
-| 비관적 락(`SELECT ... FOR UPDATE`) | 정확하지만 조회부터 커밋까지 잠금을 쥐고, 결제·주문을 함께 다루는 경로마다 잠금 순서를 맞춰야 함. 조건부 UPDATE도 행 잠금을 쓰지만 UPDATE 한 문장 동안만 기다림 |
-| 낙관적 락(`@Version`) | 충돌이 예외로 나와 트랜잭션이 롤백 전용이 됨 → 웹훅 수신 기록까지 함께 롤백. 재시도 코드와 도메인의 version 필드가 필요 |
-| 유니크 위반 예외로 중복 판정 | PostgreSQL은 예외가 나면 트랜잭션 전체를 중단시켜 후속 처리를 못 함 → `ON CONFLICT DO NOTHING`으로 대체 |
-| 분산 락(Redis 등) | 인프라가 하나 늘고, DB 하나로 충분한 규모(1GB 인스턴스) |
+### 2.3 중복 처리
 
-**증명: 동시성 테스트** (`e2e/PaymentDuplicateNotificationConcurrencyTest`, Testcontainers PostgreSQL 17, 스레드가 출발선에서 동시에 시작)
+![](docs/image/02.png)
+![](docs/image/03.png)
+![](docs/image/04.png)
+![](docs/image/05.png)
 
-| 시나리오 | 스레드 | 결과 | 검증 |
-|---|---|---|---|
-| 같은 승인 웹훅(같은 `eventId`, 실제 서명) | 16 | `PROCESSED` 1, `DUPLICATE` 15 | 결제 `APPROVED`, 주문 `PAID`, 결제 승인·주문 확정 이력 각 1건, `callback_log` 1건 |
-| 승인 응답 경로 8 + 서로 다른 `eventId` 웹훅 8 | 16 | 반영 1, `ALREADY_APPLIED` 15 | 결제 `APPROVED`, 주문 `PAID`, 결제 승인·주문 확정 이력 각 1건 |
+테스트는 [중복 결제 통지](`roampass-api/src/test/java/com/roampass_server/e2e/IssuanceDuplicateCallbackConcurrencyTest.java`), [중복 공급사 콜백](`roampass-api/src/test/java/com/roampass_server/e2e/PaymentDuplicateNotificationConcurrencyTest.java`) 에서 진행합니다.
 
-실행 결과(2026-10-21, 로컬 macOS, `./gradlew test`): 두 테스트 통과(0.068초, 0.048초), 전체 404개 통과·실패 0.
+먼저 중복 처리는 **유니크 제약과 조건부 UPDATE**를 조합하여 처리했습니다.
 
-```
-./gradlew :roampass-api:test --tests '*PaymentDuplicateNotificationConcurrencyTest'
-```
+같은 요청이 여러 번 오는 경우는 유니크 제약으로 방어하고, PG 웹훅과 공급사 콜백을 처리하기 전에, 발신 측이 준 이벤트 ID로 만든 key(`PG:{eventId}`, `SUPPLIER:{eventId}`)를 수신 기록 테이블에 먼저 넣습니다. 
 
-**공급사 콜백: 같은 구성요소로 세 겹.** 콜백 중복 판정 키는 공급사 이벤트 ID(`SUPPLIER:{eventId}`)입니다.
+이 key에는 UNIQUE 제약이 걸려있고 INSERT는 `ON CONFLICT DO NOTHING`으로 실행하기 때문에, 같은 통지가 동시에 여러 개 와도 처음 하나만 기록되고 나머지는 영향받는 row가 없기 때문에 "중복"으로 끝납니다.
 
-| 단계 | 막는 것 | 방법 |
-|---|---|---|
-| ① 수신 기록 | 같은 콜백의 재전송(같은 `eventId`) | 결제와 같은 `callback_log` + `ON CONFLICT DO NOTHING` |
-| ② 발급 요청 상태 | 다른 이벤트로 같은 발급 결과가 또 옴 | `UPDATE issuance_request ... WHERE id = ? AND status = ?`. 접수 응답(`PENDING → ACCEPTED`)과 경합하면 다시 읽어 판단 |
-| ③ 주문 상태 | 발급 완료와 다른 처리의 경합 | `UPDATE orders ... WHERE status = 'ISSUE_REQUESTED'` |
-| 최후 방어 | 위 검사가 모두 뚫린 경우 | `sim_profile`의 `order_no`·`iccid`·`supplier_order_no` UNIQUE → 한 주문에 프로필 1개 |
+key 같은 경우는 이벤트 ID로 정했는데 재전송된 본문이 조금 달라도 같은 이벤트로 보기 위해서입니다.
 
-"순서 뒤바뀜"은 발급 결과가 주문당 1종류(성공 또는 실패)라 결과끼리 순서가 바뀔 일은 없고, 접수 응답보다 콜백이 먼저 오는 경우만 있습니다. 콜백 본문에 우리 주문번호가 있어 접수 번호를 저장하기 전에 와도 주문을 찾고, 늦게 온 접수 응답은 이미 끝난 요청을 바꾸지 않습니다. 실패로 닫힌 뒤 온 성공 콜백은 무시하고 기록합니다.
+이벤트 ID는 다르지만 결과가 같은 경우는 조건부 UPDATE로 막습니다. 
 
-**증명: 동시성 테스트** (`e2e/IssuanceDuplicateCallbackConcurrencyTest`)
+예를 들어 **PG 승인 응답과 승인 웹훅은 서로 다른 경로로 같은 결제를 확정**하려 하고, 공급사가 같은 발급 결과를 다른 이벤트 ID로 다시 보낼 수도 있습니다. 
 
-| 시나리오 | 스레드 | 결과 | 검증 |
-|---|---|---|---|
-| 같은 발급 완료 콜백(같은 `eventId`, 실제 서명) | 16 | `PROCESSED` 1, `DUPLICATE` 15 | `sim_profile` 1개, 주문 `ISSUED`, 주문·프로필 이력 각 1건, `callback_log` 1건 |
-| 서로 다른 `eventId`로 같은 발급 결과 | 16 | `PROCESSED` 1, `ALREADY_APPLIED` 15 | `sim_profile` 1개, 주문 `ISSUED` 이력 1건 |
+그래서 모든 상태 변경을 "예상한 이전 상태일 때만 바꾼다"는 조건(`WHERE status = 'REQUESTED'`)으로 실행하고, 영향 row로 성공 여부를 판정합니다.
 
-실행 결과(2026-10-21, 로컬 macOS): 두 테스트 통과(0.047초, 0.196초), 전체 450개 통과·실패 0.
+**비관적 락** 조회 시점부터 commit까지 lock을 소유하기 때문에 중복 요청을 모두 대기하게 만들고 잠금 순서까지 관리해야 하는데, 현재 지켜야 할 조건은 "row 하나의 상태가 예상값일 때만 바꾼다"뿐이라 조건부 UPDATE 한 문장으로 같은 보장을 얻을 수 있어 택하지 않았습니다.
 
-**"결제됐는데 발급 실패" 시나리오 테스트** (`e2e/IssuanceFailureCompensationE2ETest`, 실제 DB, 시계·PG 취소만 대역)
-- 공급사 실패 콜백 → `ISSUE_FAILED` → `REFUNDING` → PG 취소 → 주문 `REFUNDED`·결제 `CANCELLED`. 이력 11건(주문 생성부터 환불 완료까지, 주체 포함)을 순서대로 검증
-- 콜백 누락 → 2분 뒤 실패 처리 → PG 취소 3회 실패 → 주문 `NEEDS_ATTENTION`, 환불 `GAVE_UP`(시도 3회·마지막 에러 기록)
+**낙관적 락** 자주 일어날 수 있는 중복 통지를 매번 예외로 알리고 업무와 무관한 변경에도 충돌이 나기때문에, Version 기반 필드 대신 업무 상태를 비교해 중복을 영향 행 0으로 받는 조건부 UPDATE를 택했습니다. 
 
 ### 2.4 트랜잭션 경계
 
-**PG·공급사 호출은 모두 DB 트랜잭션 밖입니다.**
-```
-결제 요청: [tx#1] 결제 가능 확인 → REQUESTED 저장 → 커밋
-           → PG 승인 호출 (트랜잭션 없음, 연결 2초·응답 5초 타임아웃)
-           → [tx#2] 결과 반영(결제 확정 유스케이스)
-웹훅:      [tx] 수신 기록 INSERT → 결제 확정 → 처리 결과 기록
-상태 조회:  30초마다 1분 지난 REQUESTED를 PG에 조회(트랜잭션 없음) → [tx] 결제 확정
+PG 호출과 공급사 호출은 모두 DB 트랜잭션 밖에 위치합니다.
 
-발급 요청: [tx] PAID → ISSUE_REQUESTED(조건부 UPDATE) + 발급 요청 저장 → 커밋
-           → 공급사 접수 호출 (트랜잭션 없음, 멱등 키 {주문번호}-ISSUE-{시도 번호})
-           → [tx] 접수 번호 저장
-공급사 콜백: [tx] 수신 기록 INSERT → 발급 요청 완료 → 프로필 생성 → 주문 ISSUED
-대기 초과:  [tx] 발급 요청 FAILED → 주문 ISSUE_FAILED → REFUNDING → 환불 요청 생성
-환불 실행:  PG 취소 호출(트랜잭션 없음, 취소 키 refund-{환불 요청 id}) → [tx] 결과 반영
-```
-- **밖에 둔 이유**: PG 응답을 기다리는 최대 5초 동안 DB 커넥션을 쥐고 있지 않기 위해서입니다(커넥션 풀 기본 10개). 그리고 PG 승인은 우리 DB 트랜잭션을 롤백해도 취소되지 않으므로, 같은 트랜잭션에 묶어도 원자성을 얻지 못합니다.
-- **tx#1을 PG 호출 전에 커밋하는 이유**: 승인 응답보다 웹훅이 먼저 도착해도 결제 시도를 찾을 수 있게 하기 위해서입니다.
-- **PG는 승인했는데 tx#2가 실패하면**: 결제는 `REQUESTED`로 남고, 웹훅이나 상태 조회 스케줄러가 같은 결제 확정 유스케이스로 다시 반영합니다. 확정은 여러 번 실행돼도 한 번만 반영되도록 만들어져 있습니다(2.3).
-- **공급사가 접수는 했는데 우리 DB 저장이 실패하면**: 발급 요청은 `PENDING`으로 남고, 발급 스케줄러가 다음 주기에 **같은 멱등 키**로 다시 요청합니다. 공급사는 같은 키에 처음 접수 번호를 그대로 돌려주므로 발급이 두 번 일어나지 않습니다. 그 사이 콜백이 먼저 와도 본문의 주문번호로 요청을 찾아 완료합니다. 끝내 결과가 없으면 2분 뒤 실패 처리되고 자동 환불로 이어집니다.
-- **환불(PG 취소) 재시도**: 취소 키가 환불 요청마다 고정이라, 타임아웃으로 결과를 몰라 다시 보내도 PG가 한 번만 취소합니다. 결과 반영은 "PENDING이고 시도 횟수가 그대로일 때만" 조건부로 저장해 같은 결과가 두 번 반영되지 않습니다.
-- **타임아웃(결과를 모름)**: 결제를 `REQUESTED`로 두고 응답에도 그대로 알려 줍니다. 이후 웹훅이나 상태 조회(멱등 키로 조회)로 확정합니다. PG의 4xx는 거절이 확실하므로 `FAILED`, 5xx·타임아웃은 처리 여부를 알 수 없으므로 `REQUESTED` 유지입니다.
+결제를 예로 들면, 먼저 한 트랜잭션에서 결제 시도를 `REQUESTED`로 저장하고 커밋한 뒤(`PaymentRequestService.start`), 트랜잭션 밖에서 PG에 승인을 요청하고(`PaymentService.pay`), 응답을 받으면 별도 트랜잭션에서 결과를 반영합니다(`PaymentConfirmationService`). 발급도 같은 구조로, 주문을 `ISSUE_REQUESTED`로 바꾸고 발급 요청을 저장하는 트랜잭션, 공급사 호출, 접수 결과를 반영하는 트랜잭션이 나뉘어 있습니다. 환불(PG 취소)과 공급사 상태 조회도 마찬가지입니다.
 
-**주문 생성 재전송을 막는 키**
+외부 호출을 트랜잭션 안에 두면 상대가 응답하는 동안(최대 5초) DB 연결과 행 잠금을 계속 쥐고 있게 되어, 같은 주문에 들어온 웹훅·콜백·환불 요청이 그동안 기다려야 합니다. 또 트랜잭션은 롤백할 수 있어도 이미 보낸 외부 호출은 되돌릴 수 없어서, PG는 승인했는데 우리 쪽만 롤백되어 결제 기록이 사라지는 상황이 생길 수 있습니다. 그래서 "보낼 일을 먼저 DB에 기록하고 커밋 → 외부 호출 → 결과를 따로 반영" 순서로 정했고, 중간에 끊기더라도 DB에 남은 상태와 멱등 키로 이어서 처리합니다.
 
-결제·환불·운영자 조치는 대상 주문이 이미 있어 주문 상태(조건부 UPDATE)로 중복을 막지만, 주문 생성은 아직 대상이 없습니다. 그래서 주문 생성만 클라이언트가 만든 멱등 키를 받습니다.
+#### 2.4.1 공급사가 접수했는데 우리 DB 저장이 실패하는 경우
 
-| 상황 | 키 없이 | `Idempotency-Key` 사용 |
-|---|---|---|
-| 같은 화면에서 연타 | 주문 2건(프론트 버튼 비활성화로만 방어) | 같은 주문 1건 |
-| 서버가 주문을 커밋한 직후 죽어 응답 유실 → 재시도 | 주문 2건 | 같은 주문 1건(처음과 같은 201·같은 주문번호) |
-| 같은 키로 다른 요금제·여행 시작일 | – | 409 `IDEMPOTENCY_KEY_REUSED` |
+공급사 호출 전에 발급 요청이 `PENDING`으로 이미 커밋되어 있기 때문에, 공급사가 접수한 뒤 우리 쪽 저장(접수 번호 기록)이 실패해도 요청 자체가 사라지지는 않습니다. 
 
-- **키는 클라이언트가 첫 전송 전에 만듭니다.** 서버가 요청마다 만들면 재전송과 새 주문을 구분할 수 없습니다. 제출용 프론트는 주문 폼을 렌더할 때 키를 만들어 폼에 넣으므로, 브라우저가 다시 제출해도 같은 키가 갑니다.
-- **키와 주문은 같은 행·같은 트랜잭션에 저장합니다**(`orders.idempotency_key`, `(user_id, idempotency_key)` 부분 UNIQUE). 키를 메모리나 별도 저장소에 두면 그 사이에서 서버가 죽을 때 "주문은 있는데 키는 없음"이 되어 다시 중복이 생깁니다.
-- **동시 재전송**은 `INSERT ... ON CONFLICT DO NOTHING`(수신 기록과 같은 방식)으로 한쪽만 저장되고, 나머지는 저장된 주문을 읽어 돌려줍니다. 예외가 아니라 영향 행 수로 판정해 트랜잭션이 깨지지 않습니다.
-- 증명: `e2e/OrderIdempotencyConcurrencyTest` — 같은 키로 8개 동시 요청 → 모두 같은 주문번호, 주문 1건, 생성 이력 1건.
-- 키는 선택입니다. 헤더 없는 호출(curl·기존 테스트)은 이전처럼 매번 새 주문입니다.
+발급 요청은 `PENDING`으로 남고, 10초 주기로 발급 스케줄러가 polling하여 **같은 멱등 키**(`{주문번호}-ISSUE-{시도}`)로 다시 보냅니다. 
 
-**결제 버튼 연타 · 타임아웃 후 재시도를 막는 키**
+공급사는 같은 키를 이미 받은 접수로 보고 같은 접수 번호를 돌려주므로 SIM이 두 번 발급되지 않고, 이번에는 우리 쪽 저장이 성공합니다.
 
-| 상황 | 막는 방법 |
-|---|---|
-| 연타(순차) | 결과를 모르는 `REQUESTED` 시도가 있으면 새 결제 거절: 409 `PAYMENT_IN_PROGRESS`. 이미 결제된 주문은 409 `ORDER_NOT_PAYABLE` |
-| 연타(동시) | 두 요청이 같은 시도 번호를 계산해도 멱등 키 `{주문번호}-{시도 번호}`가 UNIQUE라 하나만 저장, 나머지는 409 `PAYMENT_IN_PROGRESS` |
-| 타임아웃 후 재시도 | 앞 시도가 `REQUESTED`로 남아 있어 새 시도는 409. 웹훅이나 상태 조회로 앞 시도가 확정된 뒤에만 다음 키(`-2`)로 결제 가능. 같은 키가 PG에 다시 가도 mock-pg는 처음 결과를 돌려주고 한 번만 승인 |
-| 그래도 두 번 승인되면 | 부분 유니크 인덱스(주문당 승인 결제 1건)가 두 번째 반영을 거부 |
+그 사이 공급사의 발급 완료 콜백이 먼저 도착할 수도 있는데, 콜백에는 서버의 주문번호가 있어 접수 번호가 아직 저장되지 않더라도 주문을 찾아 처리하고, 나중에 도착한 접수 응답은 이미 끝난 요청을 바꾸지 않습니다. 
 
-**웹훅·콜백 응답 코드** (PG 웹훅과 공급사 콜백이 같은 규칙): 받은 통지가 진짜 PG가 보낸 것이면 처리 결과와 관계없이 200을 주고, 결과는 본문 `result`에 담습니다(`PROCESSED`, `DUPLICATE`, `ALREADY_APPLIED`, `AMOUNT_MISMATCH` 등). 4xx·5xx는 PG에게 "다시 보내라"는 신호로 쓰입니다. 금액 불일치는 다시 받아도 결과가 같으니 200으로 받고, 거절과 이상 건은 `callback_log`에 남깁니다. 서명 불일치는 401, 본문 형식 오류는 400, 처리 중 예상 못 한 오류는 500(트랜잭션 롤백 → PG가 재전송하면 다시 처리)입니다. 웹훅은 받은 요청 안에서 동기로 처리합니다. 처리하는 일이 DB 갱신 몇 건이라 PG의 응답 제한 시간(예: 토스페이먼츠 10초) 안에 끝난다고 판단했습니다.
+콜백 처리 자체가 DB 오류로 실패하면 수신 기록까지 함께 롤백되어 같은 콜백이 다시 오면 새로 처리되며, 끝내 반영되지 못하면 2분 대기 초과 검사가 발급 실패로 처리해 자동 환불을 시작합니다. 
 
-### 2.5 "이 사용자가 SIM을 설치했다"를 무엇으로 판단
+#### 2.4.3 결제 버튼 연타와 타임아웃 후 재시도
 
-**공급사가 알려 주는 신호만 설치·개통의 근거로 씁니다.** 공급사 신호는 두 가지입니다: **개통 이벤트 콜백**(빠르지만 가끔 빠짐)과 **상태 조회 API**(늦지만 언제든 다시 물을 수 있음). 우리 서버가 직접 아는 신호는 QR 열람뿐이고, 그것은 설치가 아닙니다.
+먼저 1차적인 방어는 클라이언트에서 버튼을 비활성화 시킵니다.
 
-| 신호 | 출처(이력 주체) | 얼마나 믿는가 | 반영 |
-|---|---|---|---|
-| QR 열람 | 우리 API `POST /api/sims/{orderNo}/qr-viewed` (USER) | 화면을 열었다는 사실만. 설치 여부는 모름 | `QR_VIEWED`. **환불 가능 판정에 영향 없음** |
-| 개통 이벤트 콜백 `ACTIVATED` + `activatedAt` | 공급사 콜백 `POST /api/issuance/callback` (SUPPLIER, 사유 "공급사 개통 콜백") | 서명(HMAC)이 맞으면 개통의 근거. 같은 `eventId`는 한 번만 | `ACTIVE`, 개통 시각은 공급사 값. 보통 몇 초 안에 반영 |
-| `INSTALLED` | 공급사 상태 조회 (SUPPLIER) | 설치의 근거 | `INSTALLED`, 설치 시각 기록 → 환불 불가 |
-| `ENABLED` + `activatedAt` | 공급사 상태 조회 (SUPPLIER) | 개통의 근거, 개통 시각은 공급사 값(UTC) 그대로 | `ACTIVE`. 만료 = 개통 + 24시간 × 사용 일수(표시는 KST) |
-| `DELETED` | 공급사 상태 조회 (SUPPLIER) | 기기에서 지움 | 상태는 그대로, 삭제 시각만 기록. 설치했다 지운 SIM도 여전히 환불 불가 |
+이 후 서버에서는 주문당 결제 시도 키(`{주문번호}-{시도 번호}`)로 막게 되는데, 결제를 요청하면 먼저 같은 주문에 아직 결과가 나지 않은(`REQUESTED`) 결제가 있는지 보고, 있으면 409 `PAYMENT_IN_PROGRESS`로 거절합니다. 
 
-- **앞으로만 진행**: 늦게 온 이전 단계 신호·중복 신호는 무시하고, 단계를 건너뛴 신호(설치 없이 개통)는 받아들여 빈 시각을 채웁니다. 신호 순서가 바뀌는 것을 정상 상황으로 봅니다.
-- **두 신호의 조합: 콜백이 주 경로, 폴링이 안전망**
-  - 개통 이벤트 콜백이 오면 바로 `ACTIVE`로 반영합니다. 유심 개통 콜백은 공급사가 우리 주문번호를 모르므로 ICCID로 프로필을 찾습니다.
-  - **콜백이 빠지면** 다음 폴링 주기(최대 약 1분)에 상태 조회가 `ENABLED`를 보고 같은 결과로 반영합니다. 설치(`INSTALLED`)·삭제(`DELETED`)는 콜백이 없어 폴링으로만 압니다.
-  - **두 경로가 같은 코드로 반영합니다**(`ProfileSignalApplier`). 설치 상태는 앞으로만 진행하고 조건부 UPDATE로 저장해서, 콜백과 폴링이 같은 개통을 동시에 반영해도 한 번만 바뀌고 이력도 1건입니다(`e2e/ActivationSignalConcurrencyTest`). 폴링이 먼저 반영한 뒤 늦게 온 콜백은 `ALREADY_APPLIED`로 기록만 남습니다.
-  - 이력 사유가 "공급사 개통 콜백" / "공급사 상태 조회"로 갈려, 운영자는 어느 신호로 바뀌었는지 볼 수 있습니다.
-  - 우리에게 없는 ICCID의 개통 콜백은 아무것도 바꾸지 않고 `callback_log`에 `TARGET_NOT_FOUND`로 남깁니다.
-- **유심 개통 응답이 유실되면**: 개통 콜백이나 폴링이 메웁니다(테스트로 검증). 발급 콜백 누락은 2분 대기 후 실패·자동 환불로 처리합니다(2.2).
-- **얼마나 자주, 어떤 SIM만**: 1분마다, **개통 전이고 삭제되지 않았으며 여행 시작일 3일 전부터 시작일 + 사용 일수까지 창 안에 있는 SIM만** 조회합니다. 여행이 먼 SIM은 아직 설치할 이유가 적고, 개통된 SIM은 만료가 시간만으로 정해지므로(조회 시점에 `EXPIRED` 판정) 다시 묻지 않습니다. 모든 활성 SIM을 매분 조회하지 않는 이유입니다.
-- **환불 판정 직전에는 다시 조회**: 콜백은 빠질 수 있고 폴링은 늦을 수 있으므로, 운영자 수동 환불과 사용자 환불 요청은 판정 직전에 공급사 상태를 한 번 더 조회해 반영한 뒤 "설치·개통된 SIM은 환불 불가"를 판정합니다. 폴링 주기 사이에 설치된 경우도 놓치지 않기 위해서입니다.
+두 요청이 거의 동시에 들어오더라도 둘 다 같은 시도 번호로 같은 키를 만들고 `payment.idempotency_key`에 UNIQUE 제약이 있어 하나만 저장되고 나머지는 409로 충돌 예외를 발생시킵니다. 
 
-**만료일 검증** (`e2e/SimExpiryE2ETest`): 부록 A 예시 그대로 7일 요금제를 주문·결제·발급한 뒤, 공급사가 `ENABLED`·`2026-05-01T15:20:00Z`를 돌려주면 폴링이 `ACTIVE`로 반영하고 만료는 `2026-05-08T15:20:00Z` = **KST 2026-05-09 00:20**, 만료 1초 전은 `ACTIVE`, 만료 시각부터 `EXPIRED`입니다.
+Mock PG 측에도 이 키를 멱등 키로 보내므로 PG 쪽에서도 같은 결제가 두 번 승인되지 않습니다. 
 
-**신호가 틀렸을 때**
-- **운영자**: 어드민 주문 상세의 타임라인에 언제·어떤 신호로(`SUPPLIER`, 사유 "공급사 상태 조회: ENABLED") 상태가 바뀌었는지와 프로필의 설치·개통·삭제 시각이 남아, 판단 근거를 그대로 볼 수 있습니다. 공급사가 잘못 `ENABLED`를 주면 수동 환불은 `SIM_NOT_REFUNDABLE`로 막힙니다. 이를 사람이 덮어쓰는 기능은 없습니다(미구현 참고).
-- **사용자**: 내 SIM 상세(`GET /api/sims/{orderNo}`)에서 설치 상태(`sim.installStatus`)와 환불 가능 여부(`refundable`)를 봅니다. 화면에 "설치 안 됨"으로 보여도 환불 요청 시 공급사를 다시 조회하므로, 실제로 설치됐다면 409 `SIM_NOT_REFUNDABLE`로 거절되고 상세의 설치 상태도 함께 갱신됩니다.
+**PG 승인 타임아웃 후 재시도**같은 경우 새 결제를 만들지 않고 같은 결제 시도 키로 결과를 확인합니다. 응답을 받지 못하면 결제는 `REQUESTED`로 남고, 이 상태에서 사용자가 다시 결제를 눌러도 `PAYMENT_IN_PROGRESS`로 막아 새 승인 요청을 보내지 않습니다. 
+
+대신 PG 웹훅이 오면 그것으로 확정하고, 1분이 지나도 확정되지 않으면 상태 조회 스케줄러가 같은 키로 PG에 결과를 물어 확정합니다. PG에 요청이 닿지 않았던 것으로 확인되면 실패로 닫아 다시 결제할 수 있게 합니다.
+
+**공급사 발급 타임아웃 후 재시도**는 앞에서 설명한 발급 요청 키(`{주문번호}-ISSUE-{시도}`)를 그대로 다시 보내고, **PG 취소 타임아웃 후 재시도**는 환불 요청마다 고정된 취소 키(`refund-{환불 요청 id}`)를 다시 보냅니다. 
+
+실제로는 처리됐는데 응답만 못 받은 경우에도 상대가 같은 키를 한 번만 반영하여 중복이 발생하지 않도록 설계했습니다.
+
+### 2.5 사용자 SIM 설치 판단
+
+설치와 개통은 공급사가 알려 주는 결과를 근거로 합니다. 
+
+현재 애플리케이션 서버가 직접 아는 것은 사용자가 설치 코드를 연 사실(`QR_VIEWED`)뿐인데, 이것은 "코드를 봤다"는 뜻일 뿐 기기에 설치했다는 증거가 아니므로 환불 가능 여부에 영향을 주지 않습니다. 
+
+공급사 결과는 크게 두 가지로:
+
+**개통 이벤트 콜백**은 개통되는 즉시 오지만 가끔 누락되고, **상태 조회 API**는 현재 우리 서버 측에서 요청해야 알 수 있지만 언제든 다시 물을 수 있습니다. 
+
+콜백은 서명이 맞을 때만 신뢰하고 같은 이벤트 ID는 한 번만 반영하며, 상태 조회의 `INSTALLED`는 설치, `ENABLED`는 개통의 근거로 씁니다. 
+
+개통 시각은 공급사가 알려 준 UTC 값을 그대로 저장하고, 만료일은 이 시각에 24시간 × 사용 일수를 더해 계산합니다(표시는 KST). 
+
+공급사가 `DELETED`를 알려 주면 상태는 그대로 두고 삭제 시각만 기록하므로, 설치했다가 지운 SIM도 환불할 수 없습니다.
+
+**콜백이 빠지거나 늦는 경우** 상태 조회를 안전망으로 두었습니다. 개통 콜백이 오면 바로 `ACTIVE`로 반영하고, 콜백이 빠지면 다음 상태 조회(최대 약 1분 뒤)가 `ENABLED`를 보고 같은 결과로 반영합니다. 
+
+설치(`INSTALLED`)는 콜백이 없어 상태 조회로만 알 수 있습니다. 두 경로는 같은 코드(`ProfileSignalApplier`)로 반영되고, 설치 상태는 앞으로만 진행하며 조건부 UPDATE로 저장합니다.
+
+그래서 늦게 온 이전 단계 신호나 중복 신호는 무시되고, 콜백과 상태 조회가 같은 개통을 동시에 반영해도 상태는 한 번만 바뀌고 이력도 1건만 남습니다(`e2e/ActivationSignalConcurrencyTest`). 
+
+설치 신호 없이 개통 신호가 먼저 오면 개통은 설치를 포함한 것으로 보고 비어 있는 설치 시각을 채웁니다.
+
+**상태 조회**는 1분 주기로 아직 개통되지 않았고(`ISSUED`·`QR_VIEWED`·`INSTALLED`) 기기에서 삭제되지 않았으며, 여행 시작일 3일 전부터 여행 시작일 + 사용 일수까지의 기간 안에 있는 SIM만 조회합니다. 
+
+여행이 아직 먼 SIM은 설치할 가능성이 낮고, 이미 개통된 SIM은 만료가 시간만으로 정해져 조회할 때 계산하면 되므로 다시 묻지 않도록 설계했습니다. 
+
+운영자는 어드민 주문 상세의 타임라인에서 상태가 언제, 어떤 신호로 바뀌었는지(주체 `SUPPLIER`, 사유 "공급사 개통 콜백" 또는 "공급사 상태 조회: ENABLED")와 프로필의 설치·개통·삭제 시각을 그대로 봅니다. 
+
+그래서 공급사가 잘못된 신호를 보냈다면 어느 경로로 들어온 것인지 확인할 수 있습니다. 다만 공급사가 잘못 `ENABLED`를 보내 환불이 `SIM_NOT_REFUNDABLE`로 막힌 경우, 운영자가 이를 덮어쓰고 환불하는 기능은 만들지 않았습니다. 
+
+사용자는 내 SIM 화면에서 설치 상태와 환불 가능 여부를 봅니다. 화면에 "설치 전"으로 보여도 환불을 요청하면 서버가 공급사를 다시 조회하므로, 실제로 설치됐다면 "설치하거나 개통한 SIM은 환불할 수 없어요"라는 안내와 함께 거절되고 화면의 설치 상태도 함께 갱신됩니다.
 
 ### 2.6 어드민과 사용자 화면에서 서버와 클라이언트의 경계
 
-**어드민 쪽**
-- 상태 판정·조치 가능 여부·동시 클릭 방지는 모두 서버가 합니다. 화면은 서버가 준 상태를 그대로 보여 주고, 조치 버튼은 서버의 409(`ORDER_NOT_REFUNDABLE`, `SIM_NOT_REFUNDABLE`, `ACTION_CONFLICT` 등)를 그대로 안내하면 됩니다.
-- **몇 초 전 데이터인가**: 어드민 응답은 모두 `{asOf, data}` 형식이고 `asOf`는 서버가 DB를 조회한 시각(UTC)입니다. 화면은 "asOf 기준 N초 전"으로 표시합니다. 다만 DB의 결제·설치 상태 자체도 외부 신호가 반영된 시점의 값이라, 결제는 웹훅(보통 즉시)·상태 조회(최대 약 1분 30초), 설치는 폴링(최대 약 1분)만큼 늦을 수 있습니다.
-- 운영자는 주문·결제 상태를 저장된 값 그대로 봅니다(조회 시점 판정 없음). 예를 들어 만료 스케줄러가 아직 돌지 않은 주문은 `PENDING`으로 보이는데, 시스템이 실제로 기록한 상태와 화면이 다르지 않게 하기 위해서입니다.
-- 예외는 설치 상태의 `EXPIRED`입니다. SIM 만료는 개통 시각 + 사용 일수로 정해지고 저장하는 단계가 없어서, 저장값 그대로면 운영자에게 영원히 `ACTIVE`로 보입니다. 그래서 어드민 목록·상세·필터와 사용자 화면 모두 조회 시점에 `EXPIRED`를 판정합니다.
-- **목록 필터**(과제 2.3-⑤): 주문 상태(발급 단계 포함)·결제 상태(주문의 가장 최근 결제 시도)·설치 상태(조회 시점 기준)·SIM 종류·생성 기간, 페이지네이션(최대 50건).
+먼저 판단은 전부 서버가 하고 클라이언트는 서버가 준 결과를 보여주도록 결정했습니다. 이는 상태를 검증하는 작업은 클라이언트를 신뢰하면 안된다고 판단했기때문입니다.
 
-**사용자 쪽**
-- **발급 대기 결과는 클라이언트 폴링으로 받습니다.** 결제 후 화면은 `GET /api/sims/{orderNo}`를 응답의 `waiting.pollIntervalSeconds`(3초)마다 다시 조회하고, `orderStatus`가 `ISSUED`(SIM 표시)·`REFUNDING`/`REFUNDED`(발급 실패·환불 안내)로 바뀌면 멈춥니다.
-- **폴링을 고른 이유**: 발급은 서버 스케줄러가 끝까지 진행하므로 화면이 연결을 붙잡고 있을 이유가 없습니다. 브라우저를 닫았다 다시 열어도 같은 API 한 번이면 현재 상태를 알 수 있고, 서버는 연결 상태를 들고 있지 않아도 됩니다. 결과가 나오기까지 길어야 2분 남짓(콜백 대기 한도)이라 3초 간격 조회 비용도 작습니다. SSE·WebSocket은 연결 관리와 재연결 시 놓친 이벤트 처리가 추가로 필요해 이 규모에서는 택하지 않았습니다.
-- **발급이 늦을 때 할 수 있는 일**: 이심 결제 후 발급 전에만 상세 응답에 `waiting`이 붙습니다.
+주문·결제·설치 상태, 환불 가능 여부, 남은 사용 시간과 만료 시각, 운영자 조치를 실행할 수 있는지는 모두 서버가 요청 시점 기준으로 판정해 응답에 담습니다. 
 
-  | 항목 | 공급사 요청 전(`PAID` → `QUEUED`) | 공급사 처리 중(`ISSUE_REQUESTED` → `REQUESTED`) |
-  |---|---|---|
-  | `requestedAt` | 없음 | 공급사에 요청한 시각 |
-  | `resultDeadline` | 없음 | 요청 + 2분. 이때까지 결과가 없으면 서버가 실패 처리 후 자동 환불 |
-  | `overdue` | false | `resultDeadline`이 지났으면 true(곧 실패 처리·자동 환불) |
-  | `actions` | `WAIT`, `CHECK_LATER`, `REQUEST_REFUND` | `WAIT`, `CHECK_LATER` |
+**발급 대기 화면** 같은 경우 클라이언트 polling으로 받습니다. 결제 후 화면은 주문이 서버에서 움직이는 동안(`PAID`, `ISSUE_REQUESTED`, `ISSUE_FAILED`)만 백엔드가 응답에 담아 준 간격마다 화면을 서버에서 다시 그립니다. 
 
-  `CHECK_LATER`는 "화면을 닫아도 서버가 계속 진행하니 나중에 내 SIM에서 확인"입니다. 공급사에 요청이 나간 뒤에는 환불 요청을 받지 않습니다. 공급사 접수와 환불이 엇갈리는 것을 막기 위해서이고, 대신 결과 대기 한도를 넘기면 서버가 자동으로 환불합니다.
-- **판정은 서버가 합니다**: 환불 가능 여부(`refundable`), 남은 시간(`sim.remainingSeconds`), 만료 시각(`sim.expiresAt`·`expiresAtKst`)은 서버가 요청 시점 기준으로 계산해 줍니다. 화면은 `remainingSeconds`를 받은 뒤 로컬에서 줄여 보여 주되, 판정 자체를 다시 하지 않습니다. 환불 버튼은 `refundable`일 때만 보여 주고, 연타·동시 요청은 서버가 1건만 접수합니다(나머지 409, `e2e/UserConcurrentRefundTest`).
-- **몇 초 전 데이터인가**: 사용자 응답의 상태는 요청 시점에 DB를 읽은 값이고, 결제 대기 주문의 만료는 조회 시점에 판정합니다(`PENDING`이라도 만료 시각이 지났으면 `EXPIRED`). 설치 상태는 공급사 폴링 주기(최대 약 1분)만큼 늦을 수 있어, 환불처럼 결과가 갈리는 동작은 직전에 공급사를 다시 조회합니다.
+주문이 `ISSUED`나 `REFUNDING`·`REFUNDED`되면 polling을 멈춥니다.
 
-### 2.7 이번 과제에서 처음 써본 것
+polling을 고른 이유는 발급을 서버 스케줄러가 끝까지 진행하므로 화면이 연결을 붙잡고 있을 이유가 없기 때문입니다. 브라우저를 닫았다 다시 열어도 같은 조회 한 번이면 현재 상태를 알 수 있고, 결과는 길어야 2분 남짓(콜백 대기 한도) 안에 나오므로 3초 간격 조회 비용도 작습니다. 
+
+SSE같은 경우 생소한 개념이기도 하고 연결 관리와 재연결 시 놓친 이벤트 처리가 추가로 필요해 택하지 않았습니다.
+
+**어드민이 보는 결제 상태**에서 어드민 응답은 모두 `{asOf, data}` 형태이고, `asOf`는 서버가 DB를 조회한 시각입니다. 
+
+어드민 화면은 이 값을 기준으로 "N초 전 데이터"를 매초 갱신해 보여 주고, 시각에 마우스를 올리면 KST 조회 시각이 나오며, 옆의 새로고침 버튼으로 필터를 유지한 채 다시 조회합니다. 
+
+다만 DB에 저장된 결제·설치 상태 자체도 외부 신호가 반영된 시점의 값이라, 결제는 웹훅(보통 즉시)이나 상태 조회(최대 약 1분 30초), 설치는 상태 조회 주기(최대 약 1분)만큼 실제보다 늦을 수 있습니다. 
+
+그래서 환불처럼 결과가 갈리는 조치는 화면의 값을 믿지 않고 실행 직전에 공급사 상태를 다시 조회해 판정합니다.
+
+### 2.7 과제에서 처음 써본 것
+
+서버에서 처음 도입해본 기술은 **JPA**입니다.
+
+도입을 위해 AI에 공식 문서를 학습 시킨 뒤에 핵심 문법, 영속성 컨텍스트(flush), 객체를 매핑했을 때 실제 DB 테이블에 어떻게 반영되는지 작동 메커니즘을 짧게 숙지했습니다. 
+
+실제로 한정된 시간에 프로덕션에 즉시 적용해야 한다는 상황을 가정을 했기 때문에, 이해한 내용을 기반으로 프로젝트에 적용하고 제가 이해한 선까지만 사용(매핑, 단순 조회)하고, JPA가 제공하는 장점을 전부 사용하진 않았습니다.
+
+의도한대로 작동하는지에 대한 결과는 테스트 코드로 검증을 했습니다.
 
 ### 2.8 시간이 더 있었다면?
 
----
+서버에서 발생할 수 있는 엣지 케이스를 고려하여 예외 처리를 추가 했을 것입니다.
 
-## 시연 방법
-
-### 모의 PG 장애 주입
-`mock-pg`는 시작 설정(`mock-pg/src/main/resources/application.yml`의 `mock-pg.faults.*`, 기본은 장애 없음)과 실행 중 변경 API를 제공합니다. `PUT`은 설정 전체를 교체하며, 빠진 항목은 장애 없음으로 바뀝니다.
-
-```bash
-# 현재 설정 / 초기화
-curl localhost:8081/mock/pg/config
-curl -X POST localhost:8081/mock/pg/config/reset
-
-# 승인 실패율 50%
-curl -X PUT localhost:8081/mock/pg/config -H 'Content-Type: application/json' -d '{"approveFailureRate": 0.5}'
-
-# 같은 웹훅 3번 더 보내기(같은 eventId) → 결제는 한 번만 반영
-# (보통 승인 응답이 먼저 반영되어 첫 웹훅은 ALREADY_APPLIED, 같은 eventId 재수신은 DUPLICATE)
-curl -X PUT localhost:8081/mock/pg/config -H 'Content-Type: application/json' -d '{"webhookDuplicates": 3}'
-
-# 응답 지연 6초(> roampass-api 읽기 타임아웃 5초) + 웹훅 생략
-# → 결제는 REQUESTED로 남고, 약 1분 뒤 상태 조회 스케줄러가 PG에 물어 APPROVED로 확정
-curl -X PUT localhost:8081/mock/pg/config -H 'Content-Type: application/json' -d '{"responseDelayMs": 6000, "webhookDrop": true}'
-
-# 웹훅 금액 변조(+100원) + 응답 지연 → 변조된 웹훅은 AMOUNT_MISMATCH로 거절·기록(callback_log)
-# → 약 1분 뒤 상태 조회 스케줄러가 PG에 저장된 실제 금액(일치)을 확인해 APPROVED로 확정
-curl -X PUT localhost:8081/mock/pg/config -H 'Content-Type: application/json' -d '{"webhookAmountDelta": 100, "responseDelayMs": 6000}'
-```
-
-| 항목 | 의미 |
-|---|---|
-| `approveFailureRate` | 승인 실패 확률(0~1). 실패면 `FAILED` + 실패 웹훅 |
-| `responseDelayMs` | 승인 응답 지연(0~60000). 결제 기록·웹훅 예약 뒤에 지연하므로 "처리됐지만 응답 유실"이 재현됨 |
-| `webhookDuplicates` | 같은 웹훅 추가 발송 횟수(0~10) |
-| `webhookDrop` | 웹훅 생략 |
-| `webhookAmountDelta` | 웹훅 금액에 더할 차액(PG 저장 금액은 그대로) |
-| `cancelFailureRate` | 취소 실패 확률(0~1). 실패면 500 `CANCEL_FAILED`, 취소는 반영 안 됨 |
-
-웹훅 서명 비밀키는 두 앱이 같은 환경변수 `PG_WEBHOOK_SECRET`을 쓰며, 로컬에서는 같은 기본값이 들어 있어 따로 설정할 필요가 없습니다.
-
-### 모의 공급사 장애 주입
-`mock-supplier`도 같은 구조입니다(`mock-supplier.faults.*`, 실행 중 변경은 `/mock/supplier/config`). 접수는 항상 202로 받고, 결과는 기본 3초 뒤 서명된 콜백으로 보냅니다.
-
-```bash
-# 발급 실패율 100% → 실패 콜백 → ISSUE_FAILED → 자동 환불(REFUNDED)
-curl -X PUT localhost:8082/mock/supplier/config -H 'Content-Type: application/json' -d '{"issueFailureRate": 1}'
-
-# 같은 콜백 3번 더(같은 eventId) → 프로필 1개, 나머지는 DUPLICATE
-curl -X PUT localhost:8082/mock/supplier/config -H 'Content-Type: application/json' -d '{"callbackDuplicates": 3}'
-
-# 콜백 누락 → 2분 뒤 대기 초과로 실패 처리 → 자동 환불
-curl -X PUT localhost:8082/mock/supplier/config -H 'Content-Type: application/json' -d '{"callbackDrop": true}'
-
-# 서명 오류 → roampass-api가 401로 거절(callback_log에 signature_ok=false) → 2분 뒤 실패·환불
-curl -X PUT localhost:8082/mock/supplier/config -H 'Content-Type: application/json' -d '{"invalidSignature": true}'
-
-# 환불까지 실패시키기: mock-pg 취소 실패율 100% → 3회 실패 후 NEEDS_ATTENTION
-curl -X PUT localhost:8081/mock/pg/config -H 'Content-Type: application/json' -d '{"cancelFailureRate": 1}'
-
-# 초기화
-curl -X POST localhost:8082/mock/supplier/config/reset
-```
-
-| 항목 | 의미 |
-|---|---|
-| `issueFailureRate` | 발급 실패 확률(0~1). 접수 후 `ISSUE_FAILED` 콜백 |
-| `callbackDelayMs` | 콜백 추가 지연(0~60000), 기본 3초에 더해짐 |
-| `callbackDuplicates` | 같은 콜백 추가 발송 횟수(0~10) |
-| `callbackDrop` | 콜백 누락(발급·개통 콜백 모두) |
-| `invalidSignature` | 틀린 비밀키로 서명 |
-| `activationCallbackDrop` | 개통 이벤트 콜백만 누락(폴링이 메우는지 시연) |
-
-콜백 서명 비밀키는 두 앱이 같은 환경변수 `SUPPLIER_CALLBACK_SECRET`을 씁니다(로컬은 같은 기본값).
-
-### 설치·개통 흉내
-폴링은 여행 시작일 3일 전부터 사용 기간 끝까지의 SIM만 조회하므로, 시연용 주문은 `travelStartDate`를 오늘~3일 뒤로 만듭니다.
-
-```bash
-# 1) 발급된 이심의 ICCID 확인 (어드민 상세의 profile.iccid)
-curl localhost:8080/admin/orders/{orderNo} -H 'X-Admin-Id: admin-1'
-
-# 2) 공급사 쪽 상태를 설치 → 개통으로 바꿈 (ENABLED가 되는 순간이 개통 시각)
-curl -X POST localhost:8082/mock/supplier/profiles/{iccid}/state -H 'Content-Type: application/json' -d '{"state":"INSTALLED"}'
-curl -X POST localhost:8082/mock/supplier/profiles/{iccid}/state -H 'Content-Type: application/json' -d '{"state":"ENABLED"}'
-
-# 3) ENABLED가 되면 공급사가 개통 이벤트 콜백을 보냄(기본 3초 뒤) → 어드민 상세에서 profile.status = ACTIVE,
-#    expiresAtKst, 타임라인 사유 "공급사 개통 콜백: ENABLED" 확인. 이후 수동 환불을 시도하면 409 SIM_NOT_REFUNDABLE
-```
-
-개통 콜백이 빠졌을 때 폴링이 메우는 것을 보려면, 2)의 `ENABLED` 전에 개통 콜백만 끕니다. 1분 안에 폴링이 반영하고 타임라인 사유는 "공급사 상태 조회: ENABLED"가 됩니다.
-```bash
-curl -X PUT localhost:8082/mock/supplier/config -H 'Content-Type: application/json' -d '{"activationCallbackDrop": true}'
-```
-
-### 유심 ICCID 등록
-```bash
-# 유심 요금제(예: planId 3) 주문 → 결제 → PICKUP_READY 뒤
-curl -X POST localhost:8080/api/orders/{orderNo}/usim/register -H 'X-User-Id: user-1' \
-  -H 'Content-Type: application/json' -d '{"iccid":"8982300912345678902"}'
-# → {"installStatus":"ACTIVE"} (mock-supplier가 바로 개통)
-# 체크 디지트가 틀린 ICCID(예: ...8903) → 400 INVALID_ICCID, 이미 등록된 ICCID → 409 ICCID_ALREADY_REGISTERED
-```
-
-### 어드민
-```bash
-curl 'localhost:8080/admin/orders?status=NEEDS_ATTENTION&simType=ESIM&page=0&size=20' -H 'X-Admin-Id: admin-1'
-curl 'localhost:8080/admin/orders?paymentStatus=APPROVED&installStatus=INSTALLED' -H 'X-Admin-Id: admin-1'   # 결제 상태(최근 시도)·설치 상태 필터
-curl localhost:8080/admin/orders/{orderNo} -H 'X-Admin-Id: admin-1'     # 타임라인·결제·프로필·환불·콜백
-curl localhost:8080/admin/issues -H 'X-Admin-Id: admin-1'               # 결제 후 5분 미발급·NEEDS_ATTENTION·금액 불일치·서명 실패
-
-# 운영자 조치 (사유 필수, 동시에 눌러도 한 번만)
-curl -X POST localhost:8080/admin/orders/{orderNo}/refund -H 'X-Admin-Id: admin-1' \
-  -H 'Content-Type: application/json' -d '{"reason":"자동 환불 실패 건 수동 처리"}'
-curl -X POST localhost:8080/admin/orders/{orderNo}/reissue -H 'X-Admin-Id: admin-1' \
-  -H 'Content-Type: application/json' -d '{"reason":"공급사 장애 복구 후 재발급"}'
-```
-`NEEDS_ATTENTION` 주문은 "발급 실패율 100%"(공급사) + "취소 실패율 100%"(PG)를 켜고 결제하면 몇 분 안에 만들어집니다(환불 3회 실패: 즉시·1분·2분 뒤).
+프로덕션 서버를 운영한다고 가정하면 오류를 조기에 파악할 수 있는 로깅/메트릭 서버를 구성하고, 사용자 경험을 위해 우선적으로 필요한 다국어/다통화 기능을 우선하고, 데이터 사용량 알림, 장기 미설치 알림 기능을 추가로 구현하는 것이 좋은 방향이라고 생각합니다.  
 
 ---
 
-## 배포
+## 3. 시연 방법
 
-_(배포한 곳과 고른 이유, 콜백 주소를 잡은 방법, 배포하며 막혔던 지점)_
+### 준비
 
----
+1. [로컬 실행](#로컬-실행)으로 백엔드 4개를 띄우고, 프론트(`roampass`)를 `npm run dev`로 띄워 `http://localhost:3000`에서 진행합니다. 
+2. 화면 없이 API로만 확인해도 됩니다.
+2. 장애는 모의 서버의 설정 API로 켭니다. (시나리오가 끝나면 초기화합니다.)
 
-## 아키텍처 · 데이터 모델
+```bash
+PG=localhost:8081/mock/pg/config            # 모의 PG
+SUP=localhost:8082/mock/supplier/config     # 모의 공급사
+J='Content-Type: application/json'
 
-| 모듈 | 역할 | 배포 위치 |
-|---|---|---|
-| `roampass-api` | 주문·결제 확정·발급 오케스트레이션·어드민·설치 추적 | 인스턴스 A (+ PostgreSQL) |
-| `mock-pg` | 모의 PG (승인·취소·웹훅·장애 주입) | 인스턴스 B |
-| `mock-supplier` | 모의 공급사 (발급·콜백·상태 조회·유심 개통·장애 주입) | 인스턴스 B |
-
-### roampass-api 구조
-도메인별 패키지 안에 계층을 둡니다. 의존은 항상 도메인 쪽(안쪽)으로만 향합니다.
-```
-com.roampass_server
-├── common/
-│   ├── domain/       # 순수 Java 공유 커널: Money, OrderNo, UserId·AdminId, Actor, KoreaTime, 도메인 예외
-│   ├── application/  # NotFoundException(조회 결과 없음 → 404)
-│   ├── api/          # 공용 응답 DTO(MoneyResponse)
-│   ├── web/          # 에러 응답(ProblemDetail + code), 식별 헤더 처리
-│   └── config/       # Clock 빈, 스케줄러 on/off
-├── callback/         # 외부 통지 수신 기록(중복 판정·서명 검증), PG 웹훅·공급사 콜백 공용
-├── admin/            # 어드민 조회·이상 건·운영자 조치(여러 도메인 저장소를 읽어 조합, 자체 도메인 모델 없음)
-├── mysim/            # 사용자 화면: 내 SIM 목록·상세·발급 대기 정보·환불 요청(admin과 같은 조합 계층)
-└── {도메인}/      # plan, order, payment, issuance, history
-    ├── api/             # 컨트롤러, 요청·응답 DTO
-    ├── application/     # 유스케이스, 트랜잭션 경계
-    ├── domain/          # 순수 Java 모델 · 리포지토리 인터페이스
-    └── infrastructure/  # JPA 엔티티·어댑터, 외부 HTTP 클라이언트, 스케줄러
+curl $PG; curl $SUP                                   # 현재 설정 보기
+curl -X POST $PG/reset; curl -X POST $SUP/reset       # 초기화(장애 없음)
 ```
 
-### 도메인 모델
-모든 집합 루트와 값 객체는 Spring·JPA를 모르는 순수 Java이고, 상태 전이와 불변식은 단위 테스트로 고정되어 있습니다. 집합 루트끼리는 객체가 아니라 식별자(주문번호 등)로만 참조합니다.
+배포 환경에서은 모의 서버(인스턴스 B)를 외부에 공개하지 않아 장애 주입 API에 접근할 수 없습니다. 장애 시나리오는 로컬에서 확인하고, 배포 환경에서는 정상 흐름과 설치·개통 시연 버튼(C-1, D-1)을 확인할 수 있습니다.
 
-| 집합 루트 | 패키지 | 주요 값 객체 | 책임 |
+### A. 결제 (모의 PG)
+
+| # | 시나리오 | 설정 | 확인할 것 |
 |---|---|---|---|
-| `Plan` | `plan` | `PlanSpec`(국가·일수·데이터 용량) | 판매 중인 요금제 |
-| `Order` | `order` | `PlanSnapshot`, `OrderStatus` | 주문 상태 전이, 결제 대기 만료, 여행 시작일 검증 |
-| `Payment` | `payment` | `IdempotencyKey`, `PgTid`, `PaymentStatus` | 승인 멱등, 금액 검증, 누적 취소 |
-| `RefundAttempt` | `payment` | `RetryPolicy`, `RefundStatus` | 환불 재시도 상한·지수 백오프 |
-| `IssuanceRequest` | `issuance` | `IssuanceStatus` | 공급사 발급 요청 1건: 멱등 키, 접수 번호, 콜백 대기 기준 시각 |
-| `SimProfile` | `issuance` | `Iccid`(Luhn), `ActivationCode`, `SupplierOrderNo`, `UsagePeriod`, `InstallStatus` | 설치 상태(앞으로만), KST 만료일, 환불 가능 판정 |
-| `StatusHistory` | `history` | `HistoryTarget` | 추가만 가능한 상태 변경 기록, 운영자 사유 필수 |
+| A-1 | 승인 실패 | `curl -X PUT $PG -H "$J" -d '{"approveFailureRate":1}'` | 결제가 실패로 끝나고 주문은 결제 대기로 남음. 설정을 끄면 같은 주문으로 다시 결제 가능 |
+| A-2 | 응답 유실 (타임아웃 + 웹훅 누락) | `curl -X PUT $PG -H "$J" -d '{"responseDelayMs":6000,"webhookDrop":true}'` | 약 5초 뒤 "결제 확인 중"이 보이고, 약 1분~1분 30초 뒤 상태 조회 스케줄러가 PG에 물어 결제 확정 → 발급 진행. 어드민 타임라인의 결제 승인 주체는 시스템 |
+| A-3 | 중복 웹훅 | `curl -X PUT $PG -H "$J" -d '{"webhookDuplicates":3}'` | 결제는 한 번만 승인됨. 어드민 상세의 콜백 기록에 같은 eventId가 `DUPLICATE`로 남음 |
+| A-4 | 웹훅 금액 변조 | `curl -X PUT $PG -H "$J" -d '{"webhookAmountDelta":100,"responseDelayMs":6000}'` | 금액이 다른 웹훅은 거절되어 어드민 "처리 대기 → 결제 금액 불일치"에 남음. 약 1분~1분 30초 뒤 PG에 저장된 맞는 금액으로 확정 |
 
-여러 도메인이 함께 쓰는 값은 `common.domain`에 둡니다: `Money`, `OrderNo`, `SimType`, `UserId`·`AdminId`, `Actor`, `KoreaTime`.
+설정 항목: `approveFailureRate`(0~1), `responseDelayMs`(0~60000, 결제는 먼저 기록하고 응답만 늦춤), `webhookDuplicates`(0~10, 같은 eventId 추가 발송), `webhookDrop`, `webhookAmountDelta`(웹훅 금액만 변경), `cancelFailureRate`(0~1, 취소 시 500).
 
-- 데이터 용량은 요금제 전체 기간의 총량(MB)으로 가정했습니다. 과제에는 하루 기준인지 총량인지 나와 있지 않습니다.
+### B. 발급·환불 (모의 공급사)
 
-### 데이터 모델 (현재 스키마)
-스키마는 Flyway(`db/migration`)가 관리하고, Hibernate는 `ddl-auto: validate`로 검증만 합니다.
+공급사는 접수만 바로 응답하고, 결과는 약 3초 뒤 서명된 콜백으로 보냅니다.
 
-```mermaid
-erDiagram
-    plan ||--o{ orders : "plan_id"
-    orders ||--o{ status_history : "order_no"
-    orders ||--o{ payment : "order_no"
-    orders ||--o{ issuance_request : "order_no"
-    orders ||--o| sim_profile : "order_no"
-    payment ||--o{ refund_attempt : "idempotency_key"
-    plan {
-        BIGSERIAL id PK
-        VARCHAR country_code
-        INT days
-        INT data_mb
-        VARCHAR sim_type
-        BIGINT price_amount
-        VARCHAR price_currency
-    }
-    orders {
-        BIGSERIAL id PK
-        VARCHAR order_no UK
-        VARCHAR user_id
-        BIGINT plan_id FK
-        VARCHAR sim_type
-        BIGINT amount
-        VARCHAR currency
-        DATE travel_start_date
-        VARCHAR status
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ expires_at
-        TIMESTAMPTZ issued_at
-        VARCHAR idempotency_key
-    }
-    status_history {
-        BIGSERIAL id PK
-        VARCHAR order_no FK
-        VARCHAR target_type
-        VARCHAR target_key
-        VARCHAR from_status
-        VARCHAR to_status
-        VARCHAR actor
-        VARCHAR reason
-        TIMESTAMPTZ occurred_at
-    }
-    payment {
-        BIGSERIAL id PK
-        VARCHAR idempotency_key UK
-        VARCHAR order_no FK
-        BIGINT amount
-        VARCHAR currency
-        VARCHAR status
-        VARCHAR pg_tid
-        BIGINT cancelled_amount
-        VARCHAR failure_reason
-        TIMESTAMPTZ requested_at
-        TIMESTAMPTZ approved_at
-    }
-    callback_log {
-        BIGSERIAL id PK
-        VARCHAR source
-        VARCHAR event_key UK
-        VARCHAR order_no
-        BOOLEAN signature_ok
-        TEXT payload
-        VARCHAR outcome
-        VARCHAR note
-        TIMESTAMPTZ received_at
-    }
-    issuance_request {
-        BIGSERIAL id PK
-        VARCHAR order_no FK
-        INT attempt
-        VARCHAR supplier_order_no UK
-        VARCHAR status
-        VARCHAR failure_reason
-        TIMESTAMPTZ requested_at
-        TIMESTAMPTZ completed_at
-    }
-    sim_profile {
-        BIGSERIAL id PK
-        VARCHAR order_no UK
-        VARCHAR sim_type
-        VARCHAR iccid UK
-        VARCHAR activation_code
-        VARCHAR supplier_order_no UK
-        INT usage_days
-        VARCHAR install_status
-        TIMESTAMPTZ issued_at
-        TIMESTAMPTZ qr_viewed_at
-        TIMESTAMPTZ installed_at
-        TIMESTAMPTZ activated_at
-        TIMESTAMPTZ deleted_at
-    }
-    refund_attempt {
-        BIGSERIAL id PK
-        VARCHAR payment_key FK
-        VARCHAR order_no FK
-        BIGINT amount
-        VARCHAR currency
-        VARCHAR status
-        INT attempt_count
-        TIMESTAMPTZ next_retry_at
-        VARCHAR last_error
-        TIMESTAMPTZ created_at
-        TIMESTAMPTZ completed_at
-    }
+| # | 시나리오 | 설정 | 확인할 것 |
+|---|---|---|---|
+| B-1 | 발급 실패 → 자동 환불 | `curl -X PUT $SUP -H "$J" -d '{"issueFailureRate":1}'` | 결제 후 수 초 안에 발급 실패 → 자동 환불 → 환불 완료 |
+| B-2 | 중복 콜백 | `curl -X PUT $SUP -H "$J" -d '{"callbackDuplicates":3}'` | SIM은 한 번만 발급됨. 어드민 콜백 기록에 `DUPLICATE` |
+| B-3 | 콜백 누락 | `curl -X PUT $SUP -H "$J" -d '{"callbackDrop":true}'` | 발급 요청 후 2분(+ 검사 주기 최대 30초)이 지나면 "발급 콜백 대기 시간 초과"로 실패 → 자동 환불 |
+| B-4 | 서명 오류 | `curl -X PUT $SUP -H "$J" -d '{"invalidSignature":true}'` | 콜백이 401로 거절되어 "처리 대기 → 서명 불일치"에 남고, B-3처럼 2분 뒤 실패 → 자동 환불 |
+| B-5 | 환불까지 실패 → 운영자 확인 | `curl -X PUT $SUP -H "$J" -d '{"issueFailureRate":1}'`<br>`curl -X PUT $PG -H "$J" -d '{"cancelFailureRate":1}'` | PG 취소가 1분 → 2분 간격으로 3번 실패(약 3분)한 뒤 `NEEDS_ATTENTION`. 어드민 "처리 대기 → 환불 실패"에 나타남 → E에서 조치 |
+
+설정 항목: `issueFailureRate`(0~1), `callbackDelayMs`(0~60000, 기본 3초에 더함), `callbackDuplicates`(0~10), `callbackDrop`(발급·개통 콜백 모두), `invalidSignature`, `activationCallbackDrop`(개통 콜백만 누락).
+
+### C. 이심 설치·개통
+
+| # | 시나리오 | 방법 | 확인할 것 |
+|---|---|---|---|
+| C-1 | 설치·개통 (화면) | 이심 발급 후 내 SIM 상세 → **기기에 설치하기** → **현지에서 개통하기** | 설치 상태가 설치됨 → 개통됨으로 바뀌고, 개통 시각·남은 기간·만료(KST)가 보임. 환불 칸은 "환불할 수 없어요" |
+| C-2 | 개통 콜백 누락을 폴링이 메움 | 아래 명령 | 약 1분 안에 개통됨으로 바뀌고, 어드민 타임라인 사유가 "공급사 상태 조회: ENABLED" |
+
+C-1의 버튼은 모의 공급사의 상태를 바꾸고 그 응답을 바로 반영하는 시연 API(`POST /api/sims/{orderNo}/demo/install`, `/demo/activate`)를 부릅니다. C-2는 공급사 상태만 직접 바꿔 폴링 경로를 보여 줍니다. 폴링은 **여행 시작일이 오늘부터 3일 안**이고 아직 개통 전인 SIM만 조회하므로, 시작일을 그렇게 골라 주문합니다.
+
+```bash
+curl -X PUT $SUP -H "$J" -d '{"activationCallbackDrop":true}'      # 개통 콜백만 끔
+# ICCID는 내 SIM 상세 또는 어드민 상세에서 확인
+curl -X POST localhost:8082/mock/supplier/profiles/{iccid}/state -H "$J" -d '{"state":"ENABLED"}'
 ```
 
-| 인덱스 | 쓰는 곳 |
-|---|---|
-| `orders(status, expires_at)` | 만료 스케줄러: `PENDING`이면서 만료 시각이 지난 주문 |
-| `orders(user_id, created_at)` | 내 SIM 목록 |
-| `orders(user_id, idempotency_key)` 부분 UNIQUE (`idempotency_key IS NOT NULL`) | 주문 생성 재전송을 같은 주문으로 판정 |
-| `status_history(order_no, occurred_at, id)` | 어드민 주문 타임라인 |
-| `payment(idempotency_key)` UNIQUE | 결제 시도 1건 = 키 1개, 동시 결제 요청 중 하나만 저장 |
-| `payment(order_no)` 부분 UNIQUE (`status IN ('APPROVED','PARTIALLY_CANCELLED','CANCELLED')`) | 주문당 승인된 결제 최대 1건 |
-| `payment(order_no, requested_at)` | 주문의 결제 시도 목록 |
-| `payment(status, requested_at)` | 상태 조회 스케줄러: 오래된 `REQUESTED` |
-| `callback_log(event_key)` UNIQUE (NULL 허용) | 같은 통지의 중복 판정. 서명 실패 기록은 키 없이 저장해 위조 요청이 키를 선점하지 못함 |
-| `issuance_request(order_no, attempt)` UNIQUE, `(supplier_order_no)` UNIQUE | 시도마다 요청 1건, 접수 번호 하나에 요청 하나 |
-| `issuance_request(status, requested_at)` | 접수 재전송 대상(`PENDING`)·콜백 대기 초과 대상 |
-| `sim_profile(order_no)`·`(iccid)`·`(supplier_order_no)` UNIQUE | 한 주문에 프로필 1개(중복 콜백의 최후 방어) |
-| `refund_attempt(status, next_retry_at)` | 환불 스케줄러: 시도 시각이 된 `PENDING` |
-| `callback_log(order_no)` | 어드민 주문 상세의 콜백 기록 |
+### D. 유심 등록
 
-- 상태·종류는 enum 이름 문자열, 시각은 `TIMESTAMPTZ`(UTC), 금액은 통화 최소 단위 `BIGINT` + 통화 코드입니다.
-- 요금제 시드는 16개(일본·미국·베트남·태국 × 이심·유심 × 2종)이며, 유심은 같은 구성의 이심보다 2,000원 비쌉니다.
+| # | 시나리오 | 방법 | 확인할 것 |
+|---|---|---|---|
+| D-1 | 공항 수령 → 등록 (화면) | 유심 결제 후 내 SIM 상세 → **공항에서 유심 받기** → 번호가 채워지면 **ICCID 등록** | 발급 완료, 공급사가 바로 개통해 개통됨 |
+| D-2 | 잘못된 번호 | D-1에서 받은 번호의 마지막 자리를 바꿔 등록 | 체크 디지트 오류로 등록 버튼이 막히고, API로 보내면 400 `INVALID_ICCID` |
+| D-3 | 이미 쓴 번호 | 다른 유심 주문에 D-1에서 등록한 번호를 입력 | 409 `ICCID_ALREADY_REGISTERED` |
+
+"공항에서 유심 받기"는 실물 카드 대신 모의 공급사가 이 주문에 내준 번호를 받아 오는 시연 API(`POST /api/orders/{orderNo}/demo/pickup-card`)이고, 등록은 일반 API(`POST /api/orders/{orderNo}/usim/register`)를 그대로 탑니다.
+
+### E. 운영자
+
+화면은 `http://localhost:3000/admin`(주문 목록·상세, 처리 대기)입니다.
+
+| # | 시나리오 | 방법 | 확인할 것 |
+|---|---|---|---|
+| E-1 | 이상 건 모아 보기 | "처리 대기" 메뉴 | 결제 후 5분 넘게 미발급, 환불 실패, 결제 금액 불일치, 서명 불일치 |
+| E-2 | 수동 환불 | B-5 주문에서 PG 장애를 끄고(`curl -X POST $PG/reset`) 상세 → 수동 환불(사유 입력) | 환불 완료. 타임라인에 운영자 ID와 사유 |
+| E-3 | 발급 재시도 | B-5로 만든 다른 주문에서 공급사 장애를 끄고(`curl -X POST $SUP/reset`) 상세 → 발급 재시도(사유 입력) | 다음 시도 번호로 다시 발급 → 발급 완료 |
+| E-4 | 동시 조치 | 두 브라우저에서 같은 주문의 조치를 동시에 누름 | 한쪽만 성공하고 다른 쪽은 409로 거절("다른 조치나 시스템 처리가 먼저 반영됐어요"). 조치 이력도 1건 |
+
+API로 확인하려면 다음을 씁니다.
+
+```bash
+curl localhost:8080/admin/issues -H 'X-Admin-Id: admin-1'
+curl localhost:8080/admin/orders/{orderNo} -H 'X-Admin-Id: admin-1'
+curl -X POST localhost:8080/admin/orders/{orderNo}/refund  -H 'X-Admin-Id: admin-1' -H "$J" -d '{"reason":"자동 환불 실패 건 수동 처리"}'
+curl -X POST localhost:8080/admin/orders/{orderNo}/reissue -H 'X-Admin-Id: admin-1' -H "$J" -d '{"reason":"공급사 복구 후 재발급"}'
+```
 
 ---
 
-## 미구현 · 타협한 부분과 이유
+## 4. 데이터 모델, 아키텍처
+
+![](docs/image/06.png)
+![](docs/image/07.png)
+
+---
+
+## 5. 미구현
 
 - **PG에서 다른 금액으로 승인된 결제**: 확정하지 않고 `REQUESTED`로 남깁니다. 웹훅으로 온 경우는 어드민 이상 건("금액 불일치 통지")에 나오지만, 승인 응답·상태 조회 경로에서 발견한 경우는 ERROR 로그만 남고 이상 건 목록에는 나오지 않습니다. 그동안 그 주문은 새 결제도 막힙니다.
 - **웹훅 동기 처리**: 받은 요청 안에서 처리합니다. 처리량이 커지면 수신 기록만 남기고 큐로 넘기는 구조가 맞지만, 이 규모에서는 단순한 쪽을 택했습니다.
@@ -719,4 +402,7 @@ erDiagram
 - **사용자 환불 연타의 두 번째 요청은 409**: 같은 요청을 다시 보내도 200으로 돌려주는 멱등 처리는 하지 않았습니다. 화면은 409를 받으면 상세를 다시 조회해 `REFUNDING`을 보여 주면 됩니다.
 - **mock-supplier "순서 뒤바뀜" 장애 주입 없음**: 콜백은 주문당 발급 결과 1건과 개통 1건뿐이고, 개통은 발급 뒤에만 일어나 둘의 순서가 바뀔 일이 없습니다. 실제로 생길 수 있는 순서 문제인 "접수 응답보다 발급 콜백이 먼저"(`IssuanceCallbackServiceTest`)와 "개통 콜백과 폴링 중 무엇이 먼저 오든 같은 결과"(`ActivationCallbackTest`, `ActivationSignalConcurrencyTest`)는 테스트로 검증했습니다. 설치·삭제 이벤트 콜백은 과제 문구(개통 이벤트 콜백)에 맞춰 만들지 않았습니다.
 - **PG 웹훅 서명 검증은 과제 요구 밖**: 과제는 공급사 콜백의 서명 검증만 요구합니다. 위조 통지로 결제가 확정되는 것을 막기 위해 PG 웹훅에도 HMAC-SHA256 서명을 적용했습니다.
+
+## 6. 투입 시간
+
 

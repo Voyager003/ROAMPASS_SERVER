@@ -23,10 +23,13 @@ import com.roampass_server.order.domain.service.OrderNoGenerator;
 import com.roampass_server.plan.application.PlanQueryService;
 import com.roampass_server.plan.domain.model.Plan;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * 주문 생성·조회 유스케이스. 주문 저장과 이력 기록은 같은 트랜잭션
  * 빈 등록은 OrderConfig(설정값 주입)
  */
+@Slf4j
 public class OrderService {
 
     private static final String ORDER_NOT_FOUND = "ORDER_NOT_FOUND";
@@ -92,6 +95,7 @@ public class OrderService {
             throw new ConflictException("IDEMPOTENCY_KEY_REUSED",
                     "This Idempotency-Key was already used for a different order request");
         }
+        log.info("event=order_idempotent_replay orderNo={} userId={}", existing.orderNo().value(), userId.value());
         return OrderResult.of(existing, now);
     }
 

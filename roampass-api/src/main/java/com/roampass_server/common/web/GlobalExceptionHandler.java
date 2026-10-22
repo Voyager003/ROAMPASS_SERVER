@@ -47,7 +47,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     // 사전 확인을 동시에 통과한 요청을 DB 유니크 제약이 막은 경우(예: 같은 ICCID 동시 등록), 트랜잭션은 롤백됨
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ProblemDetail> handleDataIntegrity(DataIntegrityViolationException e) {
-        log.warn("Data integrity violation: {}", e.getMostSpecificCause().getMessage());
+        log.warn("event=data_integrity_violation cause=\"{}\"", e.getMostSpecificCause().getMessage());
         return problem(HttpStatus.CONFLICT, "CONFLICT", "The request conflicts with existing data");
     }
 
@@ -74,7 +74,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     ResponseEntity<ProblemDetail> handleUnexpected(Exception e) {
-        log.error("Unhandled exception", e);
+        log.error("event=unhandled_exception type={}", e.getClass().getSimpleName(), e);
         return problem(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Internal server error");
     }
 
@@ -97,7 +97,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return status != null ? status.name() : "HTTP_" + statusCode.value();
     }
 
+    /**
+     * 업무 규칙으로 거절한 요청(4xx)은 코드와 함께 INFO로 남김. 요청 로그(http_request)는 상태 코드만 있어서
+     * 왜 거절됐는지(예: ACTION_CONFLICT, PAYMENT_IN_PROGRESS)는 이 줄로 알 수 있음. 5xx는 위 핸들러가 ERROR로 남김
+     */
     private static ResponseEntity<ProblemDetail> problem(HttpStatus status, String code, String detail) {
+        if (status.is4xxClientError()) {
+            log.info("event=request_rejected status={} code={} detail=\"{}\"", status.value(), code, detail);
+        }
         ProblemDetail body = ProblemDetail.forStatusAndDetail(status, detail);
         body.setProperty("code", code);
         return ResponseEntity.status(status).body(body);

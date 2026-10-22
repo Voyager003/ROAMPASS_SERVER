@@ -13,6 +13,8 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.roampass_server.common.logging.MdcKeys;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,8 +34,6 @@ import jakarta.servlet.http.HttpServletResponse;
 public class RequestTracingFilter extends OncePerRequestFilter {
 
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
-    public static final String MDC_REQUEST_ID = "requestId";
-    public static final String MDC_ORDER_NO = "orderNo";
 
     private static final Logger log = LoggerFactory.getLogger(RequestTracingFilter.class);
     private static final Pattern VALID_REQUEST_ID = Pattern.compile("[A-Za-z0-9._-]{1,64}");
@@ -48,10 +48,10 @@ public class RequestTracingFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String requestId = requestIdOf(request);
-        MDC.put(MDC_REQUEST_ID, requestId);
+        MDC.put(MdcKeys.REQUEST_ID, requestId);
         Matcher orderNo = ORDER_NO_IN_PATH.matcher(request.getRequestURI());
         if (orderNo.find()) {
-            MDC.put(MDC_ORDER_NO, orderNo.group(1));
+            MDC.put(MdcKeys.ORDER_NO, orderNo.group(1));
         }
         response.setHeader(REQUEST_ID_HEADER, requestId);
 
@@ -60,8 +60,8 @@ public class RequestTracingFilter extends OncePerRequestFilter {
             chain.doFilter(request, response);
         } finally {
             logRequest(request, response.getStatus(), (System.nanoTime() - startedAt) / 1_000_000);
-            MDC.remove(MDC_REQUEST_ID);
-            MDC.remove(MDC_ORDER_NO);
+            MDC.remove(MdcKeys.REQUEST_ID);
+            MDC.remove(MdcKeys.ORDER_NO);
         }
     }
 

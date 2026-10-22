@@ -10,6 +10,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import com.roampass_server.common.domain.Actor;
 import com.roampass_server.common.domain.OrderNo;
+import com.roampass_server.common.logging.LogValues;
 import com.roampass_server.history.domain.model.HistoryTarget;
 import com.roampass_server.history.domain.model.StatusHistory;
 import com.roampass_server.history.domain.model.TargetType;
@@ -61,10 +62,6 @@ public class StatusHistoryRecorder {
 
     /** SIM 프로필의 열쇠는 ICCID라 뒤 4자리만 남김 */
     private static String loggableKey(HistoryTarget target) {
-        if (target.type() != TargetType.SIM_PROFILE) {
-            return target.key();
-        }
-        String key = target.key();
-        return key.length() <= 4 ? "****" : "****" + key.substring(key.length() - 4);
+        return target.type() == TargetType.SIM_PROFILE ? LogValues.iccid(target.key()) : target.key();
     }
 }

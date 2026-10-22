@@ -9,6 +9,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.roampass_server.common.logging.LogValues;
 import com.roampass_server.issuance.domain.model.Iccid;
 import com.roampass_server.issuance.domain.model.SupplierOrderNo;
 import com.roampass_server.issuance.domain.service.SupplierClient;
@@ -35,6 +36,16 @@ public class HttpSupplierClient implements SupplierClient {
 
     @Override
     public SupplierIssueResult requestIssuance(SupplierIssueRequest request) {
+        long startedAt = System.nanoTime();
+        SupplierIssueResult result = doRequestIssuance(request);
+        log.info("event=supplier_call op=issue idempotencyKey={} outcome={} supplierOrderNo={} reason={} elapsedMs={}",
+                request.idempotencyKey(), result.outcome(),
+                result.supplierOrderNo() == null ? "-" : result.supplierOrderNo().value(),
+                result.reason() == null ? "-" : result.reason(), LogValues.elapsedMs(startedAt));
+        return result;
+    }
+
+    private SupplierIssueResult doRequestIssuance(SupplierIssueRequest request) {
         try {
             IssueResponse response = restClient.post().uri("/mock/supplier/orders")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -46,16 +57,27 @@ public class HttpSupplierClient implements SupplierClient {
             }
             return SupplierIssueResult.accepted(SupplierOrderNo.of(response.supplierOrderNo()));
         } catch (HttpClientErrorException e) {
-            log.warn("Supplier rejected issuance {}: {}", request.idempotencyKey(), e.getStatusCode());
+            log.warn("event=supplier_call_error op=issue idempotencyKey={} status={}", request.idempotencyKey(),
+                    e.getStatusCode().value());
             return SupplierIssueResult.rejected("SUPPLIER_REJECTED_" + e.getStatusCode().value());
         } catch (RestClientException e) {
-            log.warn("Supplier acceptance unknown {}: {}", request.idempotencyKey(), e.getMessage());
+            log.warn("event=supplier_call_error op=issue idempotencyKey={} error=\"{}\"", request.idempotencyKey(),
+                    e.getMessage());
             return SupplierIssueResult.unknown(e.getClass().getSimpleName());
         }
     }
 
     @Override
     public SupplierProfileResult getProfile(Iccid iccid) {
+        long startedAt = System.nanoTime();
+        SupplierProfileResult result = doGetProfile(iccid);
+        // 설치 추적 폴링이 SIM마다 1분 주기로 부르므로 조회 자체는 DEBUG. 상태가 바뀌면 status_changed가 INFO로 남음
+        log.debug("event=supplier_call op=profile iccid={} outcome={} state={} elapsedMs={}", LogValues.iccid(iccid.value()),
+                result.outcome(), result.state() == null ? "-" : result.state(), LogValues.elapsedMs(startedAt));
+        return result;
+    }
+
+    private SupplierProfileResult doGetProfile(Iccid iccid) {
         try {
             ProfileResponse response = restClient.get().uri("/mock/supplier/profiles/{iccid}", iccid.value())
                     .retrieve()
@@ -69,16 +91,27 @@ public class HttpSupplierClient implements SupplierClient {
             if (e.getStatusCode().value() == HttpStatus.NOT_FOUND.value()) {
                 return SupplierProfileResult.notFound();
             }
-            log.warn("Supplier rejected profile query {}: {}", iccid.value(), e.getStatusCode());
+            log.warn("event=supplier_call_error op=profile iccid={} status={}", LogValues.iccid(iccid.value()),
+                    e.getStatusCode().value());
             return SupplierProfileResult.unknown();
         } catch (RestClientException | IllegalArgumentException e) {
-            log.warn("Supplier profile query failed {}: {}", iccid.value(), e.getMessage());
+            log.warn("event=supplier_call_error op=profile iccid={} error=\"{}\"", LogValues.iccid(iccid.value()),
+                    e.getMessage());
             return SupplierProfileResult.unknown();
         }
     }
 
     @Override
     public SupplierProfileResult activateUsim(Iccid iccid) {
+        long startedAt = System.nanoTime();
+        SupplierProfileResult result = doActivateUsim(iccid);
+        log.info("event=supplier_call op=usim_activate iccid={} outcome={} state={} elapsedMs={}",
+                LogValues.iccid(iccid.value()), result.outcome(), result.state() == null ? "-" : result.state(),
+                LogValues.elapsedMs(startedAt));
+        return result;
+    }
+
+    private SupplierProfileResult doActivateUsim(Iccid iccid) {
         try {
             ProfileResponse response = restClient.post().uri("/mock/supplier/usim/activate")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -91,7 +124,8 @@ public class HttpSupplierClient implements SupplierClient {
             return SupplierProfileResult.found(SupplierProfileState.valueOf(response.state()), response.activatedAt(),
                     response.usedMb());
         } catch (RestClientException | IllegalArgumentException e) {
-            log.warn("USIM activation result unknown {}: {}", iccid.value(), e.getMessage());
+            log.warn("event=supplier_call_error op=usim_activate iccid={} error=\"{}\"", LogValues.iccid(iccid.value()),
+                    e.getMessage());
             return SupplierProfileResult.unknown();
         }
     }

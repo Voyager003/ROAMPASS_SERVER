@@ -14,6 +14,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import com.roampass_server.callback.application.InvalidSignatureException;
 import com.roampass_server.common.application.exception.ConflictException;
 import com.roampass_server.common.application.exception.NotFoundException;
+import com.roampass_server.common.application.exception.UpstreamUnavailableException;
 import com.roampass_server.common.domain.exception.DomainException;
 import com.roampass_server.common.domain.exception.IllegalStateTransitionException;
 import com.roampass_server.common.domain.exception.InvalidValueException;
@@ -45,6 +46,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     // 사전 확인을 동시에 통과한 요청을 DB 유니크 제약이 막은 경우(예: 같은 ICCID 동시 등록), 트랜잭션은 롤백됨
+    @ExceptionHandler(UpstreamUnavailableException.class)
+    ResponseEntity<ProblemDetail> handleUpstreamUnavailable(UpstreamUnavailableException e) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, e.getCode(), e.getMessage());
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ProblemDetail> handleDataIntegrity(DataIntegrityViolationException e) {
         log.warn("event=data_integrity_violation cause=\"{}\"", e.getMostSpecificCause().getMessage());

@@ -9,6 +9,7 @@ import org.springframework.web.client.RestClientException;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.roampass_server.common.domain.Currency;
 import com.roampass_server.common.domain.Money;
+import com.roampass_server.common.logging.LogValues;
 import com.roampass_server.payment.domain.model.IdempotencyKey;
 import com.roampass_server.payment.domain.model.PgTid;
 import com.roampass_server.payment.domain.service.PgApproveRequest;
@@ -36,6 +37,15 @@ public class HttpPgClient implements PgClient {
 
     @Override
     public PgApproveResult approve(PgApproveRequest request) {
+        long startedAt = System.nanoTime();
+        PgApproveResult result = doApprove(request);
+        log.info("event=pg_call op=approve idempotencyKey={} amount={} outcome={} reason={} elapsedMs={}",
+                request.idempotencyKey().value(), request.amount().amount(), result.outcome(),
+                result.failureReason() == null ? "-" : result.failureReason(), LogValues.elapsedMs(startedAt));
+        return result;
+    }
+
+    private PgApproveResult doApprove(PgApproveRequest request) {
         try {
             ApproveResponse response = restClient.post().uri("/mock/pg/approve")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -45,16 +55,26 @@ public class HttpPgClient implements PgClient {
                     .body(ApproveResponse.class);
             return toResult(response);
         } catch (HttpClientErrorException e) {
-            log.warn("PG rejected approve {}: {}", request.idempotencyKey().value(), e.getStatusCode());
+            log.warn("event=pg_call_error op=approve idempotencyKey={} status={}", request.idempotencyKey().value(),
+                    e.getStatusCode().value());
             return PgApproveResult.failed("PG_REJECTED_" + e.getStatusCode().value());
         } catch (RestClientException e) {
-            log.warn("PG approve result unknown {}: {}", request.idempotencyKey().value(), e.getMessage());
+            log.warn("event=pg_call_error op=approve idempotencyKey={} error=\"{}\"", request.idempotencyKey().value(),
+                    e.getMessage());
             return PgApproveResult.unknown(e.getClass().getSimpleName());
         }
     }
 
     @Override
     public PgInquiryResult inquire(IdempotencyKey key) {
+        long startedAt = System.nanoTime();
+        PgInquiryResult result = doInquire(key);
+        log.info("event=pg_call op=inquiry idempotencyKey={} status={} elapsedMs={}", key.value(), result.status(),
+                LogValues.elapsedMs(startedAt));
+        return result;
+    }
+
+    private PgInquiryResult doInquire(IdempotencyKey key) {
         try {
             ApproveResponse response = restClient.get().uri("/mock/pg/payments/{key}", key.value())
                     .retrieve()
@@ -64,16 +84,25 @@ public class HttpPgClient implements PgClient {
             if (e.getStatusCode().value() == HttpStatus.NOT_FOUND.value()) {
                 return PgInquiryResult.notFound();
             }
-            log.warn("PG rejected inquiry {}: {}", key.value(), e.getStatusCode());
+            log.warn("event=pg_call_error op=inquiry idempotencyKey={} status={}", key.value(), e.getStatusCode().value());
             return PgInquiryResult.unknown();
         } catch (RestClientException e) {
-            log.warn("PG inquiry failed {}: {}", key.value(), e.getMessage());
+            log.warn("event=pg_call_error op=inquiry idempotencyKey={} error=\"{}\"", key.value(), e.getMessage());
             return PgInquiryResult.unknown();
         }
     }
 
     @Override
     public PgCancelResult cancel(PgCancelRequest request) {
+        long startedAt = System.nanoTime();
+        PgCancelResult result = doCancel(request);
+        log.info("event=pg_call op=cancel cancelKey={} pgTid={} amount={} outcome={} reason={} elapsedMs={}",
+                request.cancelKey(), request.pgTid().value(), request.amount().amount(), result.outcome(),
+                result.reason() == null ? "-" : result.reason(), LogValues.elapsedMs(startedAt));
+        return result;
+    }
+
+    private PgCancelResult doCancel(PgCancelRequest request) {
         try {
             restClient.post().uri("/mock/pg/cancel")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -82,10 +111,10 @@ public class HttpPgClient implements PgClient {
                     .toBodilessEntity();
             return PgCancelResult.cancelled();
         } catch (HttpClientErrorException e) {
-            log.warn("PG rejected cancel {}: {}", request.cancelKey(), e.getStatusCode());
+            log.warn("event=pg_call_error op=cancel cancelKey={} status={}", request.cancelKey(), e.getStatusCode().value());
             return PgCancelResult.failed("PG_REJECTED_" + e.getStatusCode().value());
         } catch (RestClientException e) {
-            log.warn("PG cancel result unknown {}: {}", request.cancelKey(), e.getMessage());
+            log.warn("event=pg_call_error op=cancel cancelKey={} error=\"{}\"", request.cancelKey(), e.getMessage());
             return PgCancelResult.unknown(e.getClass().getSimpleName());
         }
     }

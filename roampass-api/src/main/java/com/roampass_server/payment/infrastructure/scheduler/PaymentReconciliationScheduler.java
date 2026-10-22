@@ -24,10 +24,10 @@ public class PaymentReconciliationScheduler {
         try {
             int settled = reconciliationService.reconcile();
             if (settled > 0) {
-                log.info("Settled {} pending payments by PG inquiry", settled);
+                log.info("event=scheduler_run job=payment_reconciliation processed={}", settled);
             }
         } catch (RuntimeException e) {
-            log.error("Payment reconciliation run failed", e);
+            log.error("event=scheduler_failed job=payment_reconciliation", e);
         }
     }
 }

@@ -50,8 +50,8 @@ public class PaymentService {
                     result.amount(), Actor.pg());
             case FAILED -> confirmationService.confirmFailure(payment.idempotencyKey(), result.failureReason(),
                     Actor.pg());
-            case UNKNOWN -> log.warn("PG result unknown for {}: {}", payment.idempotencyKey().value(),
-                    result.failureReason());
+            case UNKNOWN -> log.warn("event=payment_result_unknown idempotencyKey={} reason=\"{}\" next=webhook_or_inquiry",
+                    payment.idempotencyKey().value(), result.failureReason());
         }
         Payment latest = paymentRepository.findByIdempotencyKey(payment.idempotencyKey()).orElseThrow();
         Order order = orderRepository.findByOrderNo(orderNo).orElseThrow();

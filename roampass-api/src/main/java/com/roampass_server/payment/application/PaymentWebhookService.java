@@ -4,11 +4,15 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.function.Function;
 
+import org.slf4j.MDC;
+
 import com.roampass_server.callback.application.InvalidSignatureException;
 import com.roampass_server.callback.domain.model.CallbackLog;
 import com.roampass_server.callback.domain.model.CallbackSource;
 import com.roampass_server.callback.domain.repository.CallbackLogRepository;
 import com.roampass_server.callback.domain.service.HmacSignature;
+import com.roampass_server.common.logging.LogValues;
+import com.roampass_server.common.logging.MdcKeys;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -41,10 +45,18 @@ public class PaymentWebhookService {
     public WebhookResult receive(String rawBody, String signatureHeader,
                                  Function<String, PaymentWebhookCommand> parser) {
         if (!signature.verify(rawBody, signatureHeader)) {
-            log.warn("PG webhook signature mismatch");
+            log.warn("event=pg_webhook_rejected reason=signature_mismatch");
             callbackLogRepository.save(CallbackLog.signatureRejected(CallbackSource.PG, rawBody, Instant.now(clock)));
             throw new InvalidSignatureException();
         }
-        return processor.process(parser.apply(rawBody), rawBody);
+        PaymentWebhookCommand command = parser.apply(rawBody);
+        String orderNo = LogValues.orderNoOfPaymentKey(command.idempotencyKey());
+        if (orderNo != null) {
+            MDC.put(MdcKeys.ORDER_NO, orderNo);
+        }
+        WebhookResult result = processor.process(command, rawBody);
+        log.info("event=pg_webhook_received eventId={} type={} idempotencyKey={} amount={} result={}",
+                command.eventId(), command.eventType(), command.idempotencyKey(), command.amount(), result);
+        return result;
     }
 }

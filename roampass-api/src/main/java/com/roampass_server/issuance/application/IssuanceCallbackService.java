@@ -4,11 +4,15 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.function.Function;
 
+import org.slf4j.MDC;
+
 import com.roampass_server.callback.application.InvalidSignatureException;
 import com.roampass_server.callback.domain.model.CallbackLog;
 import com.roampass_server.callback.domain.model.CallbackSource;
 import com.roampass_server.callback.domain.repository.CallbackLogRepository;
 import com.roampass_server.callback.domain.service.HmacSignature;
+import com.roampass_server.common.logging.LogValues;
+import com.roampass_server.common.logging.MdcKeys;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -36,11 +40,19 @@ public class IssuanceCallbackService {
     public CallbackResult receive(String rawBody, String signatureHeader,
                                   Function<String, IssuanceCallbackCommand> parser) {
         if (!signature.verify(rawBody, signatureHeader)) {
-            log.warn("Supplier callback signature mismatch");
+            log.warn("event=supplier_callback_rejected reason=signature_mismatch");
             callbackLogRepository.save(CallbackLog.signatureRejected(CallbackSource.SUPPLIER, rawBody,
                     Instant.now(clock)));
             throw new InvalidSignatureException();
         }
-        return processor.process(parser.apply(rawBody), rawBody);
+        IssuanceCallbackCommand command = parser.apply(rawBody);
+        if (command.orderNo() != null) {
+            MDC.put(MdcKeys.ORDER_NO, command.orderNo());
+        }
+        CallbackResult result = processor.process(command, rawBody);
+        log.info("event=supplier_callback_received eventId={} type={} supplierOrderNo={} iccid={} result={}",
+                command.eventId(), command.eventType(), command.supplierOrderNo() == null ? "-" : command.supplierOrderNo(),
+                LogValues.iccid(command.iccid()), result);
+        return result;
     }
 }

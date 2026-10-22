@@ -27,10 +27,10 @@ public class IssuanceSchedulers {
         try {
             int started = dispatchService.dispatch();
             if (started > 0) {
-                log.info("Started issuance for {} orders", started);
+                log.info("event=scheduler_run job=issuance_dispatch processed={}", started);
             }
         } catch (RuntimeException e) {
-            log.error("Issuance dispatch run failed", e);
+            log.error("event=scheduler_failed job=issuance_dispatch", e);
         }
     }
 
@@ -40,10 +40,10 @@ public class IssuanceSchedulers {
         try {
             int failed = timeoutService.failOverdue();
             if (failed > 0) {
-                log.warn("Failed {} issuances after callback timeout", failed);
+                log.warn("event=scheduler_run job=issuance_timeout processed={}", failed);
             }
         } catch (RuntimeException e) {
-            log.error("Issuance timeout run failed", e);
+            log.error("event=scheduler_failed job=issuance_timeout", e);
         }
     }
 }

@@ -1,5 +1,7 @@
 package com.roampass.mock.supplier.api;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -18,8 +20,12 @@ import com.roampass.mock.supplier.issuance.MockSupplierException;
 @RestControllerAdvice
 public class MockSupplierExceptionHandler extends ResponseEntityExceptionHandler {
 
+    private static final Logger log = LoggerFactory.getLogger(MockSupplierExceptionHandler.class);
+
     @ExceptionHandler(MockSupplierException.class)
     ResponseEntity<ProblemDetail> handleMockSupplier(MockSupplierException e) {
+        log.info("event=supplier_request_rejected status={} code={} detail=\"{}\"", e.getStatus().value(), e.getCode(),
+                e.getMessage());
         ProblemDetail body = ProblemDetail.forStatusAndDetail(e.getStatus(), e.getMessage());
         body.setProperty("code", e.getCode());
         return ResponseEntity.status(e.getStatus()).body(body);

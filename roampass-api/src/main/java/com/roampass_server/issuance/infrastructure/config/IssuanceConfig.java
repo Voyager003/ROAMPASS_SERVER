@@ -12,6 +12,7 @@ import org.springframework.web.client.RestClient;
 import com.roampass_server.callback.domain.repository.CallbackLogRepository;
 import com.roampass_server.callback.domain.service.HmacSignature;
 import com.roampass_server.history.application.StatusHistoryRecorder;
+import com.roampass_server.issuance.application.DemoSimService;
 import com.roampass_server.issuance.application.IssuanceAcceptanceService;
 import com.roampass_server.issuance.application.IssuanceCallbackProcessor;
 import com.roampass_server.issuance.application.IssuanceCallbackService;
@@ -27,7 +28,9 @@ import com.roampass_server.issuance.application.UsimRegistrationStartService;
 import com.roampass_server.issuance.domain.repository.IssuanceRequestRepository;
 import com.roampass_server.issuance.domain.repository.SimProfileRepository;
 import com.roampass_server.issuance.domain.service.SupplierClient;
+import com.roampass_server.issuance.domain.service.SupplierDemoClient;
 import com.roampass_server.issuance.infrastructure.external.HttpSupplierClient;
+import com.roampass_server.issuance.infrastructure.external.HttpSupplierDemoClient;
 import com.roampass_server.order.domain.repository.OrderRepository;
 import com.roampass_server.payment.application.RefundOpener;
 import com.roampass_server.plan.application.PlanQueryService;
@@ -41,13 +44,29 @@ public class IssuanceConfig {
 
     @Bean
     SupplierClient supplierClient(IssuanceProperties properties) {
+        return new HttpSupplierClient(supplierRestClient(properties));
+    }
+
+    /** 시연용 공급사 기능(설치·개통 흉내, 유심 수령 카드) */
+    @Bean
+    SupplierDemoClient supplierDemoClient(IssuanceProperties properties) {
+        return new HttpSupplierDemoClient(supplierRestClient(properties));
+    }
+
+    @Bean
+    DemoSimService demoSimService(OrderRepository orderRepository, SimProfileRepository profileRepository,
+                                  SupplierDemoClient supplierDemoClient, ProfileSignalApplier applier, Clock clock) {
+        return new DemoSimService(orderRepository, profileRepository, supplierDemoClient, applier, clock);
+    }
+
+    private static RestClient supplierRestClient(IssuanceProperties properties) {
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(
                 HttpClient.newBuilder().connectTimeout(properties.connectTimeout()).build());
         requestFactory.setReadTimeout(properties.readTimeout());
-        return new HttpSupplierClient(RestClient.builder()
+        return RestClient.builder()
                 .baseUrl(properties.supplierBaseUrl())
                 .requestFactory(requestFactory)
-                .build());
+                .build();
     }
 
     @Bean

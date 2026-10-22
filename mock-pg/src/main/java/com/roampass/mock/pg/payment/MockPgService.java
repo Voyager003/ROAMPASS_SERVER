@@ -6,6 +6,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -22,6 +24,8 @@ import com.roampass.mock.pg.webhook.WebhookPublisher;
  */
 @Service
 public class MockPgService {
+
+    private static final Logger log = LoggerFactory.getLogger(MockPgService.class);
 
     private final Map<String, MockPayment> byIdempotencyKey = new ConcurrentHashMap<>();
     private final Map<String, MockPayment> byPgTid = new ConcurrentHashMap<>();
@@ -44,13 +48,25 @@ public class MockPgService {
                 throw new MockPgException(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED",
                         "Idempotency key already used with a different request");
             }
-            return existing.view();
+            PaymentView previous = existing.view();
+            log.info("event=pg_approve idempotencyKey={} orderNo={} amount={} result={} pgTid={} replay=true",
+                    command.idempotencyKey(), command.orderNo(), command.amount(), previous.status(),
+                    previous.pgTid() == null ? "-" : previous.pgTid());
+            return previous;
         }
         if (created.pgTid() != null) {
             byPgTid.put(created.pgTid(), created);
         }
         PaymentView view = created.view();
+        log.info("event=pg_approve idempotencyKey={} orderNo={} amount={} result={} pgTid={} replay=false reason={}",
+                command.idempotencyKey(), command.orderNo(), command.amount(), view.status(),
+                view.pgTid() == null ? "-" : view.pgTid(),
+                view.status() == MockPaymentStatus.FAILED ? "injected_failure" : "-");
         publishWebhooks(view, faults);
+        if (faults.responseDelayMs() > 0) {
+            log.info("event=pg_fault_applied fault=response_delay idempotencyKey={} delayMs={}",
+                    command.idempotencyKey(), faults.responseDelayMs());
+        }
         delay(faults.responseDelayMs()); // 결제 기록·웹훅 예약 뒤 지연, 응답만 늦어지는 상황
         return view;
     }
@@ -61,23 +77,41 @@ public class MockPgService {
             throw new MockPgException(HttpStatus.NOT_FOUND, "PAYMENT_NOT_FOUND", "Unknown PG transaction id");
         }
         if (faultConfig.roll(faultConfig.current().cancelFailureRate())) {
+            log.warn("event=pg_cancel orderNo={} cancelKey={} pgTid={} amount={} result=FAILED reason=injected_failure",
+                    payment.view().orderNo(), command.cancelKey(), command.pgTid(), command.amount());
             throw new MockPgException(HttpStatus.INTERNAL_SERVER_ERROR, "CANCEL_FAILED", "Injected cancel failure");
         }
-        return payment.cancel(command);
+        CancelResult result = payment.cancel(command);
+        log.info("event=pg_cancel orderNo={} cancelKey={} pgTid={} amount={} result={} totalCancelled={}",
+                payment.view().orderNo(), command.cancelKey(), command.pgTid(), command.amount(), result.status(),
+                result.totalCancelledAmount());
+        return result;
     }
 
     public Optional<PaymentView> find(String idempotencyKey) {
-        return Optional.ofNullable(byIdempotencyKey.get(idempotencyKey)).map(MockPayment::view);
+        Optional<PaymentView> found = Optional.ofNullable(byIdempotencyKey.get(idempotencyKey)).map(MockPayment::view);
+        log.info("event=pg_inquiry idempotencyKey={} found={} status={}", idempotencyKey, found.isPresent(),
+                found.map(v -> v.status().name()).orElse("-"));
+        return found;
     }
 
     private void publishWebhooks(PaymentView view, FaultSettings faults) {
         if (faults.webhookDrop()) {
+            log.info("event=pg_fault_applied fault=webhook_drop idempotencyKey={}", view.idempotencyKey());
             return;
         }
         WebhookEventType type = view.status() == MockPaymentStatus.APPROVED
                 ? WebhookEventType.PAYMENT_APPROVED : WebhookEventType.PAYMENT_FAILED;
         WebhookEvent event = new WebhookEvent(newId("evt_"), type, view.idempotencyKey(), view.pgTid(),
                 view.orderNo(), view.amount() + faults.webhookAmountDelta(), view.currency(), Instant.now());
+        if (faults.webhookAmountDelta() != 0) {
+            log.info("event=pg_fault_applied fault=webhook_amount_tampered idempotencyKey={} eventId={} delta={}",
+                    view.idempotencyKey(), event.eventId(), faults.webhookAmountDelta());
+        }
+        if (faults.webhookDuplicates() > 0) {
+            log.info("event=pg_fault_applied fault=webhook_duplicates idempotencyKey={} eventId={} extraCopies={}",
+                    view.idempotencyKey(), event.eventId(), faults.webhookDuplicates());
+        }
         for (int i = 0; i <= faults.webhookDuplicates(); i++) {
             webhookPublisher.publish(event); // 중복분도 같은 eventId
         }

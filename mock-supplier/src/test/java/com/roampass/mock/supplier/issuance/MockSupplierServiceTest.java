@@ -275,4 +275,38 @@ class MockSupplierServiceTest {
             });
         }
     }
+
+    @Nested
+    @DisplayName("유심 수령 카드(시연용)를 요청하면")
+    class PickupCardIssue {
+
+        @Test
+        @DisplayName("체크 디지트가 맞는 19자리 ICCID를 주고, 같은 주문은 같은 번호, 다른 주문은 다른 번호")
+        void issues_one_card_per_order() {
+            // when
+            PickupCard first = service.issuePickupCard("ORD-20261022-CARD0001");
+            PickupCard again = service.issuePickupCard("ORD-20261022-CARD0001");
+            PickupCard other = service.issuePickupCard("ORD-20261022-CARD0002");
+
+            // then
+            assertThat(first.iccid()).hasSize(19).containsOnlyDigits();
+            assertThat(again.iccid()).isEqualTo(first.iccid());
+            assertThat(other.iccid()).isNotEqualTo(first.iccid());
+        }
+
+        @Test
+        @DisplayName("그 카드로 개통하면 프로필이 ENABLED가 되고, 개통 콜백에 카드를 받은 주문번호가 실린다")
+        void activation_of_card_carries_order_no() {
+            // given
+            PickupCard card = service.issuePickupCard("ORD-20261022-CARD0003");
+
+            // when
+            ProfileView view = service.activateUsim(card.iccid(), NOW);
+
+            // then
+            assertThat(view.state()).isEqualTo(ProfileState.ENABLED);
+            assertThat(published).singleElement()
+                    .satisfies(delivery -> assertThat(delivery.event().orderNo()).isEqualTo("ORD-20261022-CARD0003"));
+        }
+    }
 }

@@ -11,6 +11,9 @@ import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
+
+import com.roampass.mock.supplier.LogMask;
 
 import tools.jackson.databind.json.JsonMapper;
 
@@ -67,9 +70,20 @@ public class HttpCallbackPublisher implements CallbackPublisher {
                     .body(body)
                     .retrieve()
                     .toBodilessEntity();
-            log.info("Callback sent: {} {}", delivery.event().eventType(), delivery.event().eventId());
+            log.info("event=supplier_callback_sent eventId={} type={} orderNo={} iccid={} signatureValid={}",
+                    delivery.event().eventId(), delivery.event().eventType(), orderNoOf(delivery),
+                    LogMask.iccid(delivery.event().iccid()), delivery.signatureValid());
+        } catch (RestClientResponseException e) {
+            log.warn("event=supplier_callback_failed eventId={} type={} orderNo={} signatureValid={} status={}",
+                    delivery.event().eventId(), delivery.event().eventType(), orderNoOf(delivery),
+                    delivery.signatureValid(), e.getStatusCode().value());
         } catch (RestClientException e) {
-            log.warn("Callback delivery failed: {} {}", delivery.event().eventId(), e.getMessage());
+            log.warn("event=supplier_callback_failed eventId={} type={} orderNo={} error=\"{}\"",
+                    delivery.event().eventId(), delivery.event().eventType(), orderNoOf(delivery), e.getMessage());
         }
+    }
+
+    private static String orderNoOf(CallbackDelivery delivery) {
+        return delivery.event().orderNo() == null ? "-" : delivery.event().orderNo();
     }
 }

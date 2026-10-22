@@ -4,3 +4,9 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+
+# 컨테이너 로그는 ECS JSON 한 줄씩. MDC(requestId, orderNo, idempotencyKey)가 필드로 들어가 jq·수집기로 거를 수 있음
+logging:
+  structured:
+    format:
+      console: ecs

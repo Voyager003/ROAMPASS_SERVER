@@ -45,7 +45,7 @@ public class WebConfig implements WebMvcConfigurer {
                     .allowedOrigins(origins)
                     .allowedMethods(methods)
                     .allowedHeaders(headers)
-                    .exposedHeaders(HttpHeaders.LOCATION)
+                    .exposedHeaders(HttpHeaders.LOCATION, RequestTracingFilter.REQUEST_ID_HEADER)
                     .maxAge(3600);
         }
     }

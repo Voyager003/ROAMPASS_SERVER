@@ -6,9 +6,12 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+import com.roampass.mock.supplier.LogMask;
 import com.roampass.mock.supplier.callback.CallbackDelivery;
 import com.roampass.mock.supplier.callback.CallbackEvent;
 import com.roampass.mock.supplier.callback.CallbackEventType;
@@ -24,9 +27,14 @@ import com.roampass.mock.supplier.fault.FaultSettings;
 @Service
 public class MockSupplierService {
 
+    private static final Logger log = LoggerFactory.getLogger(MockSupplierService.class);
+
     private final Map<String, SupplierOrder> byIdempotencyKey = new ConcurrentHashMap<>();
     private final Map<String, SupplierOrder> byIccid = new ConcurrentHashMap<>();
     private final Map<String, SupplierOrder> bySupplierOrderNo = new ConcurrentHashMap<>();
+    /** 주문번호 → 그 주문에 내준 유심 카드 ICCID(시연용 수령 카드) */
+    private final Map<String, String> pickupCardByOrderNo = new ConcurrentHashMap<>();
+    private final Map<String, String> orderNoByPickupCard = new ConcurrentHashMap<>();
     private final CallbackPublisher callbackPublisher;
     private final FaultConfig faultConfig;
     private final IccidGenerator iccidGenerator;
@@ -47,18 +55,27 @@ public class MockSupplierService {
                         "LPA:1$smdp.example$" + newId("").substring(0, 12).toUpperCase());
         SupplierOrder existing = byIdempotencyKey.putIfAbsent(command.idempotencyKey(), created);
         if (existing != null) {
+            log.info("event=supplier_issue idempotencyKey={} orderNo={} supplierOrderNo={} replay=true",
+                    command.idempotencyKey(), command.orderNo(), existing.supplierOrderNo());
             return new IssueResult(existing.supplierOrderNo(), existing.orderNo(), "ACCEPTED");
         }
         bySupplierOrderNo.put(created.supplierOrderNo(), created);
         if (created.issued()) {
             byIccid.put(created.iccid(), created);
         }
+        log.info("event=supplier_issue idempotencyKey={} orderNo={} supplierOrderNo={} result={} iccid={} replay=false",
+                command.idempotencyKey(), command.orderNo(), created.supplierOrderNo(),
+                created.issued() ? "ISSUED" : "FAILED_INJECTED", LogMask.iccid(created.iccid()));
         publishCallbacks(created, faults);
         return new IssueResult(created.supplierOrderNo(), created.orderNo(), "ACCEPTED");
     }
 
     public Optional<ProfileView> findProfile(String iccid) {
-        return Optional.ofNullable(byIccid.get(iccid)).map(SupplierOrder::view);
+        Optional<ProfileView> found = Optional.ofNullable(byIccid.get(iccid)).map(SupplierOrder::view);
+        // roampass-api 설치 추적이 SIM마다 1분 주기로 부르므로 DEBUG
+        log.debug("event=supplier_profile_query iccid={} found={} state={}", LogMask.iccid(iccid), found.isPresent(),
+                found.map(v -> v.state().name()).orElse("-"));
+        return found;
     }
 
     /** 테스트·시연 보조: 접수 번호로 발급된 ICCID 조회 */
@@ -67,11 +84,32 @@ public class MockSupplierService {
     }
 
     /**
+     * 시연용 유심 수령 카드 발급. 실제로는 공급사가 만든 카드를 공항에서 건네고 사용자가 뒷면 번호를 입력하지만,
+     * 시연에는 실물 카드가 없어 공급사가 이 주문용 카드 번호(19자리, Luhn)를 내줌. 같은 주문은 항상 같은 번호
+     */
+    public PickupCard issuePickupCard(String orderNo) {
+        boolean[] created = {false};
+        String iccid = pickupCardByOrderNo.computeIfAbsent(orderNo, key -> {
+            created[0] = true;
+            String next;
+            do {
+                next = iccidGenerator.next();
+            } while (byIccid.containsKey(next) || orderNoByPickupCard.putIfAbsent(next, key) != null);
+            return next;
+        });
+        log.info("event=supplier_pickup_card_issued orderNo={} iccid={} replay={}", orderNo, LogMask.iccid(iccid),
+                !created[0]);
+        return new PickupCard(orderNo, iccid);
+    }
+
+    /**
      * 유심 개통(부록 A `POST /usim/activate`). 공항에서 받은 카드의 ICCID는 공급사가 이미 알고 있다고 보고,
      * 처음 요청이면 프로필을 ENABLED로 등록. 같은 ICCID 재요청은 처음 개통 시각 그대로(멱등)
      */
     public ProfileView activateUsim(String iccid, Instant now) {
-        SupplierOrder order = byIccid.computeIfAbsent(iccid, id -> new SupplierOrder(newId("SUP-"), null, id, null));
+        // 시연용 수령 카드로 내준 번호면 그 주문에 연결(로그·조회에서 주문을 알 수 있게)
+        SupplierOrder order = byIccid.computeIfAbsent(iccid,
+                id -> new SupplierOrder(newId("SUP-"), orderNoByPickupCard.get(id), id, null));
         return applyStateChange(order, ProfileState.ENABLED, now);
     }
 
@@ -85,7 +123,11 @@ public class MockSupplierService {
     }
 
     private ProfileView applyStateChange(SupplierOrder order, ProfileState state, Instant now) {
+        ProfileState before = order.view().state();
         SupplierOrder.StateChange change = order.changeState(state, now);
+        log.info("event=supplier_profile_state iccid={} orderNo={} from={} to={} requested={} newlyActivated={}",
+                LogMask.iccid(order.iccid()), order.orderNo() == null ? "-" : order.orderNo(), before,
+                change.view().state(), state, change.newlyActivated());
         if (change.newlyActivated()) {
             publishActivated(order, change.view());
         }
@@ -96,6 +138,8 @@ public class MockSupplierService {
     private void publishActivated(SupplierOrder order, ProfileView view) {
         FaultSettings faults = faultConfig.current();
         if (faults.callbackDrop() || faults.activationCallbackDrop()) {
+            log.info("event=supplier_fault_applied fault={} type=ACTIVATED iccid={}",
+                    faults.callbackDrop() ? "callback_drop" : "activation_callback_drop", LogMask.iccid(view.iccid()));
             return;
         }
         CallbackEvent event = new CallbackEvent(newId("sevt_"), CallbackEventType.ACTIVATED, order.supplierOrderNo(),
@@ -105,6 +149,8 @@ public class MockSupplierService {
 
     private void publishCallbacks(SupplierOrder order, FaultSettings faults) {
         if (faults.callbackDrop()) {
+            log.info("event=supplier_fault_applied fault=callback_drop orderNo={} supplierOrderNo={}", order.orderNo(),
+                    order.supplierOrderNo());
             return;
         }
         CallbackEvent event = order.issued()
@@ -116,6 +162,19 @@ public class MockSupplierService {
     }
 
     private void deliver(CallbackDelivery delivery, FaultSettings faults) {
+        CallbackEvent event = delivery.event();
+        if (!delivery.signatureValid()) {
+            log.info("event=supplier_fault_applied fault=invalid_signature eventId={} type={}", event.eventId(),
+                    event.eventType());
+        }
+        if (faults.callbackDuplicates() > 0) {
+            log.info("event=supplier_fault_applied fault=callback_duplicates eventId={} type={} extraCopies={}",
+                    event.eventId(), event.eventType(), faults.callbackDuplicates());
+        }
+        if (faults.callbackDelayMs() > 0) {
+            log.info("event=supplier_fault_applied fault=callback_delay eventId={} type={} extraDelayMs={}",
+                    event.eventId(), event.eventType(), faults.callbackDelayMs());
+        }
         for (int i = 0; i <= faults.callbackDuplicates(); i++) {
             callbackPublisher.publish(delivery); // 중복분도 같은 eventId
         }

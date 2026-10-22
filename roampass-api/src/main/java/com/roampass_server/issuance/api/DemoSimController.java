@@ -1,6 +1,5 @@
 package com.roampass_server.issuance.api;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -12,11 +11,10 @@ import com.roampass_server.issuance.application.DemoSimService;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 시연용 SIM API(roampass.demo.enabled=true 일 때만 등록), X-User-Id 필수
+ * 시연용 SIM API(실제 기기 없이 설치·개통·유심 수령을 흉내), X-User-Id 필수
  */
 @RestController
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "roampass.demo", name = "enabled", havingValue = "true")
 public class DemoSimController {
 
     private final DemoSimService demoSimService;

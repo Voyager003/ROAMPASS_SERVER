@@ -7,7 +7,7 @@ import com.roampass_server.issuance.domain.model.Iccid;
 
 /**
  * 모의 공급사의 시연용 기능(과제 부록 A "상태를 INSTALLED / ENABLED 로 바꾸는 엔드포인트").
- * 실제 공급사에는 없는 기능이라 운영용 {@link SupplierClient}와 분리하고, 시연 설정이 켜졌을 때만 빈으로 등록
+ * 실제 공급사에는 없는 기능이라 운영용 {@link SupplierClient}와 분리
  */
 public interface SupplierDemoClient {
 

@@ -32,6 +32,9 @@ public class MockSupplierService {
     private final Map<String, SupplierOrder> byIdempotencyKey = new ConcurrentHashMap<>();
     private final Map<String, SupplierOrder> byIccid = new ConcurrentHashMap<>();
     private final Map<String, SupplierOrder> bySupplierOrderNo = new ConcurrentHashMap<>();
+    /** 주문번호 → 그 주문에 내준 유심 카드 ICCID(시연용 수령 카드) */
+    private final Map<String, String> pickupCardByOrderNo = new ConcurrentHashMap<>();
+    private final Map<String, String> orderNoByPickupCard = new ConcurrentHashMap<>();
     private final CallbackPublisher callbackPublisher;
     private final FaultConfig faultConfig;
     private final IccidGenerator iccidGenerator;
@@ -81,11 +84,32 @@ public class MockSupplierService {
     }
 
     /**
+     * 시연용 유심 수령 카드 발급. 실제로는 공급사가 만든 카드를 공항에서 건네고 사용자가 뒷면 번호를 입력하지만,
+     * 시연에는 실물 카드가 없어 공급사가 이 주문용 카드 번호(19자리, Luhn)를 내줌. 같은 주문은 항상 같은 번호
+     */
+    public PickupCard issuePickupCard(String orderNo) {
+        boolean[] created = {false};
+        String iccid = pickupCardByOrderNo.computeIfAbsent(orderNo, key -> {
+            created[0] = true;
+            String next;
+            do {
+                next = iccidGenerator.next();
+            } while (byIccid.containsKey(next) || orderNoByPickupCard.putIfAbsent(next, key) != null);
+            return next;
+        });
+        log.info("event=supplier_pickup_card_issued orderNo={} iccid={} replay={}", orderNo, LogMask.iccid(iccid),
+                !created[0]);
+        return new PickupCard(orderNo, iccid);
+    }
+
+    /**
      * 유심 개통(부록 A `POST /usim/activate`). 공항에서 받은 카드의 ICCID는 공급사가 이미 알고 있다고 보고,
      * 처음 요청이면 프로필을 ENABLED로 등록. 같은 ICCID 재요청은 처음 개통 시각 그대로(멱등)
      */
     public ProfileView activateUsim(String iccid, Instant now) {
-        SupplierOrder order = byIccid.computeIfAbsent(iccid, id -> new SupplierOrder(newId("SUP-"), null, id, null));
+        // 시연용 수령 카드로 내준 번호면 그 주문에 연결(로그·조회에서 주문을 알 수 있게)
+        SupplierOrder order = byIccid.computeIfAbsent(iccid,
+                id -> new SupplierOrder(newId("SUP-"), orderNoByPickupCard.get(id), id, null));
         return applyStateChange(order, ProfileState.ENABLED, now);
     }
 

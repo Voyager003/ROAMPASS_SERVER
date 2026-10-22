@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.roampass.mock.supplier.issuance.IssueResult;
 import com.roampass.mock.supplier.issuance.MockSupplierException;
 import com.roampass.mock.supplier.issuance.MockSupplierService;
+import com.roampass.mock.supplier.issuance.PickupCard;
 import com.roampass.mock.supplier.issuance.ProfileView;
 
 import jakarta.validation.Valid;
@@ -48,6 +49,12 @@ public class MockSupplierController {
     @PostMapping("/usim/activate")
     public ProfileView activateUsim(@Valid @RequestBody ActivateUsimRequest request) {
         return service.activateUsim(request.iccid(), Instant.now(clock));
+    }
+
+    /** 시연용: 이 주문에 내줄 유심 수령 카드(공항에서 받는 실물 카드 대신). 같은 주문은 같은 번호 */
+    @PostMapping("/usim/cards")
+    public PickupCard issuePickupCard(@Valid @RequestBody PickupCardRequest request) {
+        return service.issuePickupCard(request.orderNo());
     }
 
     /** 시연용: 설치(INSTALLED)·개통(ENABLED)·삭제(DELETED) 흉내 */

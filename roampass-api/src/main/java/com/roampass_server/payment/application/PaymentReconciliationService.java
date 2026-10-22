@@ -66,7 +66,7 @@ public class PaymentReconciliationService {
             case UNKNOWN -> null;
         };
         if (confirmation == ConfirmationResult.AMOUNT_MISMATCH) {
-            log.error("Payment {} approved at PG with a different amount, needs operator review",
+            log.error("event=payment_amount_mismatch source=inquiry idempotencyKey={} action=operator_review",
                     payment.idempotencyKey().value());
         }
         return confirmation == ConfirmationResult.CONFIRMED

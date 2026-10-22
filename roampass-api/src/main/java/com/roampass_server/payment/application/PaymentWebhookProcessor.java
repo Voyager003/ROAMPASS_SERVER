@@ -53,7 +53,7 @@ public class PaymentWebhookProcessor {
         IdempotencyKey key = IdempotencyKey.from(command.idempotencyKey());
         if (!callbackLogRepository.insertIfAbsent(
                 CallbackLog.received(CallbackSource.PG, eventKey, key.orderNo(), rawBody, Instant.now(clock)))) {
-            log.info("Duplicate PG webhook {}", eventKey);
+            log.info("event=pg_webhook_duplicate eventId={}", eventKey);
             return WebhookResult.DUPLICATE;
         }
         ConfirmationResult result = confirm(command);
@@ -69,7 +69,7 @@ public class PaymentWebhookProcessor {
                     Money.of(command.amount(), currency(command.currency())), Actor.pg());
             case FAILED -> confirmationService.confirmFailure(key, "PG 실패 통지", Actor.pg());
             default -> {
-                log.warn("Unknown PG webhook type {}", command.eventType());
+                log.warn("event=pg_webhook_ignored reason=unknown_type type={}", command.eventType());
                 yield ConfirmationResult.IGNORED;
             }
         };

@@ -29,7 +29,7 @@ public class IssuanceAcceptanceService {
         try {
             accepted = request.accept(supplierOrderNo);
         } catch (InvalidValueException e) {
-            log.error("Supplier returned a different order number for {}: {}", orderNo.value(), e.getMessage());
+            log.error("event=supplier_acceptance_mismatch orderNo={} detail=\"{}\"", orderNo.value(), e.getMessage());
             return;
         }
         if (accepted != request) {

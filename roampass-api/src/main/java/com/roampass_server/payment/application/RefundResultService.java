@@ -88,7 +88,7 @@ public class RefundResultService {
     private void moveOrder(OrderNo orderNo, OrderStatus target, String reason, Instant now) {
         Order order = orderRepository.findByOrderNo(orderNo).orElseThrow();
         if (order.status() != OrderStatus.REFUNDING) {
-            log.warn("Order {} is {} while applying refund result, order left unchanged", orderNo.value(),
+            log.warn("event=refund_result_skipped orderNo={} orderStatus={} reason=order_not_refunding", orderNo.value(),
                     order.status());
             return;
         }

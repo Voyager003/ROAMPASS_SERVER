@@ -54,17 +54,19 @@ public class PaymentConfirmationService {
         Instant now = Instant.now(clock);
         Payment payment = paymentRepository.findByIdempotencyKey(key).orElse(null);
         if (payment == null) {
-            log.warn("Approval for unknown payment {}", key.value());
+            log.warn("event=payment_confirm_skipped kind=approval reason=unknown_payment idempotencyKey={}", key.value());
             return ConfirmationResult.PAYMENT_NOT_FOUND;
         }
         Payment approved;
         try {
             approved = payment.approve(pgTid, approvedAmount, now);
         } catch (PaymentAmountMismatchException e) {
-            log.warn("Approval amount mismatch {}: expected {}, got {}", key.value(), payment.amount(), approvedAmount);
+            log.warn("event=payment_confirm_skipped kind=approval reason=amount_mismatch idempotencyKey={} expected={} actual={}",
+                    key.value(), payment.amount(), approvedAmount);
             return ConfirmationResult.AMOUNT_MISMATCH;
         } catch (IllegalStateTransitionException e) {
-            log.warn("Approval not applicable to payment {}: {}", key.value(), e.getMessage());
+            log.warn("event=payment_confirm_skipped kind=approval reason=not_applicable idempotencyKey={} detail=\"{}\"",
+                    key.value(), e.getMessage());
             return ConfirmationResult.IGNORED;
         }
         if (approved == payment || !paymentRepository.saveIfStatus(approved, payment.status())) {
@@ -80,7 +82,7 @@ public class PaymentConfirmationService {
         Instant now = Instant.now(clock);
         Payment payment = paymentRepository.findByIdempotencyKey(key).orElse(null);
         if (payment == null) {
-            log.warn("Failure for unknown payment {}", key.value());
+            log.warn("event=payment_confirm_skipped kind=failure reason=unknown_payment idempotencyKey={}", key.value());
             return ConfirmationResult.PAYMENT_NOT_FOUND;
         }
         if (payment.status() == PaymentStatus.FAILED) {
@@ -90,7 +92,8 @@ public class PaymentConfirmationService {
         try {
             failed = payment.fail(reason, now);
         } catch (IllegalStateTransitionException e) {
-            log.warn("Failure not applicable to payment {}: {}", key.value(), e.getMessage());
+            log.warn("event=payment_confirm_skipped kind=failure reason=not_applicable idempotencyKey={} detail=\"{}\"",
+                    key.value(), e.getMessage());
             return ConfirmationResult.IGNORED; // 승인된 결제는 뒤집지 않음
         }
         if (!paymentRepository.saveIfStatus(failed, payment.status())) {

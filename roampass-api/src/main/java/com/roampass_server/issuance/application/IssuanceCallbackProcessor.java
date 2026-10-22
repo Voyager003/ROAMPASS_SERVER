@@ -13,6 +13,7 @@ import com.roampass_server.callback.domain.repository.CallbackLogRepository;
 import com.roampass_server.common.domain.Actor;
 import com.roampass_server.common.domain.OrderNo;
 import com.roampass_server.common.domain.exception.InvalidValueException;
+import com.roampass_server.common.logging.LogValues;
 import com.roampass_server.history.application.StatusHistoryRecorder;
 import com.roampass_server.history.domain.model.HistoryTarget;
 import com.roampass_server.history.domain.model.TargetType;
@@ -91,7 +92,7 @@ public class IssuanceCallbackProcessor {
         OrderNo orderNo = OrderNo.of(command.orderNo());
         if (!callbackLogRepository.insertIfAbsent(
                 CallbackLog.received(CallbackSource.SUPPLIER, eventKey, orderNo, rawBody, now))) {
-            log.info("Duplicate supplier callback {}", eventKey);
+            log.info("event=supplier_callback_duplicate eventId={}", eventKey);
             return CallbackResult.DUPLICATE;
         }
         Outcome outcome = requestRepository.findLatestByOrderNo(orderNo).isEmpty()
@@ -120,12 +121,12 @@ public class IssuanceCallbackProcessor {
         SimProfile profile = profileRepository.findByIccid(iccid).orElse(null);
         if (!callbackLogRepository.insertIfAbsent(CallbackLog.received(CallbackSource.SUPPLIER, eventKey,
                 profile == null ? null : profile.orderNo(), rawBody, now))) {
-            log.info("Duplicate supplier callback {}", eventKey);
+            log.info("event=supplier_callback_duplicate eventId={}", eventKey);
             return CallbackResult.DUPLICATE;
         }
         Outcome outcome;
         if (profile == null) {
-            log.warn("Activation callback for unknown ICCID {}", iccid.value());
+            log.warn("event=supplier_callback_ignored reason=unknown_iccid iccid={}", LogValues.iccid(iccid.value()));
             outcome = new Outcome(CallbackResult.ORDER_NOT_FOUND, "UNKNOWN_ICCID");
         } else if (profileSignalApplier.apply(profile,
                 SupplierProfileResult.found(SupplierProfileState.ENABLED, activatedAt, 0),
@@ -158,15 +159,15 @@ public class IssuanceCallbackProcessor {
                 return new Outcome(CallbackResult.ALREADY_APPLIED, "ALREADY_ISSUED");
             }
             if (request.status() == IssuanceStatus.FAILED) {
-                log.error("Late issuance for {} after failure, profile not attached: {}", orderNo.value(),
-                        supplierOrderNo.value());
+                log.error("event=late_issuance_after_failure orderNo={} supplierOrderNo={} action=profile_not_attached",
+                        orderNo.value(), supplierOrderNo.value());
                 return new Outcome(CallbackResult.IGNORED, "LATE_ISSUANCE");
             }
             IssuanceRequest completed;
             try {
                 completed = request.complete(supplierOrderNo, now);
             } catch (InvalidValueException e) {
-                log.error("Supplier order mismatch for {}: {}", orderNo.value(), e.getMessage());
+                log.error("event=supplier_order_mismatch orderNo={} detail=\"{}\"", orderNo.value(), e.getMessage());
                 return new Outcome(CallbackResult.IGNORED, "SUPPLIER_ORDER_MISMATCH");
             }
             if (requestRepository.saveIfStatus(completed, request.status())) {

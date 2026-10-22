@@ -24,10 +24,10 @@ public class RefundExecutionScheduler {
         try {
             int refunded = refundExecutionService.processDue();
             if (refunded > 0) {
-                log.info("Refunded {} orders", refunded);
+                log.info("event=scheduler_run job=refund_execution processed={}", refunded);
             }
         } catch (RuntimeException e) {
-            log.error("Refund execution run failed", e);
+            log.error("event=scheduler_failed job=refund_execution", e);
         }
     }
 }

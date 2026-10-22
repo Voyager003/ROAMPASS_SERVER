@@ -25,10 +25,10 @@ public class OrderExpirationScheduler {
         try {
             int expired = expirationService.expireDue();
             if (expired > 0) {
-                log.info("Expired {} pending orders", expired);
+                log.info("event=scheduler_run job=order_expiration processed={}", expired);
             }
         } catch (RuntimeException e) {
-            log.error("Order expiration run failed", e);
+            log.error("event=scheduler_failed job=order_expiration", e);
         }
     }
 }

@@ -63,8 +63,8 @@ public class IssuanceDispatchService {
             case ACCEPTED -> acceptanceService.accept(request.orderNo(), result.supplierOrderNo());
             case REJECTED -> failureService.fail(request.orderNo(), "공급사 접수 거절: " + result.reason(),
                     Actor.supplier());
-            case UNKNOWN -> log.warn("Supplier acceptance unknown for {}: {}", request.idempotencyKey(),
-                    result.reason());
+            case UNKNOWN -> log.warn("event=issuance_acceptance_unknown idempotencyKey={} reason=\"{}\" next=resend_same_key",
+                    request.idempotencyKey(), result.reason());
         }
     }
 }

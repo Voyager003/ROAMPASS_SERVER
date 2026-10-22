@@ -55,7 +55,8 @@ public class RefundExecutionService {
         if (result.outcome() == PgCancelResult.Outcome.CANCELLED) {
             return resultService.applySuccess(attempt);
         }
-        log.warn("PG cancel failed for refund {} ({}): {}", attempt.id(), result.outcome(), result.reason());
+        log.warn("event=refund_attempt_failed refundId={} orderNo={} outcome={} reason=\"{}\"", attempt.id(),
+                attempt.orderNo().value(), result.outcome(), result.reason());
         resultService.applyFailure(attempt, result.outcome() + ": " + result.reason());
         return false;
     }

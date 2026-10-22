@@ -24,10 +24,10 @@ public class ProfileTrackingScheduler {
         try {
             int changed = trackingService.poll();
             if (changed > 0) {
-                log.info("Updated install status of {} SIM profiles", changed);
+                log.info("event=scheduler_run job=profile_tracking processed={}", changed);
             }
         } catch (RuntimeException e) {
-            log.error("Profile tracking run failed", e);
+            log.error("event=scheduler_failed job=profile_tracking", e);
         }
     }
 }
